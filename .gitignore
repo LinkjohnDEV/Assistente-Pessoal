@@ -1,0 +1,20 @@
+# NUNCA versionar — comentário só vale em linha própria; no fim da linha o
+# git trata tudo como parte do nome do arquivo e o padrão não casa com nada.
+
+# chave da Lauren, segredo do webhook, credenciais do canal
+config.json
+
+# as contas, o dinheiro e as conversas da casa
+casa.db
+casa.db-journal
+casa.db-shm
+casa.db-wal
+
+# histórico arquivado e logs
+arquivo/
+*.log
+
+# lixo
+__pycache__/
+*.pyc
+*.bak

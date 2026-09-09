@@ -1,0 +1,24 @@
+{
+  "lauren": {
+    "base_url": "https://ialauren.com/v1",
+    "api_key": "COLAR-AQUI",
+    "modelo": "lauren-4"
+  },
+  "whatsapp": {
+    "grupo_jid": "120363XXXXXXXXXXXX@g.us",
+    "webhook_secret": "GERAR-COM-secrets.token_urlsafe(32)",
+    "api_url": "http://10.0.0.X:3000/api/group",
+    "api_key": "CHAVE-DO-CANAL",
+    "api_token": "TOKEN-DO-CANAL"
+  },
+  "assistente": {
+    "wake_word": "lauren",
+    "responder_sem_wake": false,
+    "host": "0.0.0.0",
+    "porta": 8090
+  },
+  "pessoas": {
+    "IDENTIFICADOR-DA-PESSOA-1": "Fulano",
+    "IDENTIFICADOR-DA-PESSOA-2": "Ciclana"
+  }
+}

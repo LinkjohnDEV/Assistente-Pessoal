@@ -1,0 +1,39 @@
+# Instalar com:
+#   cp /opt/lauren-assistente/lauren-assistente.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now lauren-assistente
+# NÃO instalado ainda de propósito — o dono liga os dois lados junto.
+
+[Unit]
+Description=Lauren — assistente da casa (webhook do grupo de WhatsApp)
+After=network-online.target
+Wants=network-online.target
+# 5 quedas em 10 min = desiste e entra em falha, disparando o alerta.
+# Sem isto o systemd reinicia pra sempre em silêncio e ninguém fica sabendo.
+StartLimitIntervalSec=600
+StartLimitBurst=5
+OnFailure=lauren-alerta.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/lauren-assistente
+ExecStart=/usr/bin/python3 /opt/lauren-assistente/assistente.py --webhook
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lauren
+
+# a chave e os dados da casa estão nesta pasta; nada mais precisa ser alcançável
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/lauren-assistente
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
