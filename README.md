@@ -119,7 +119,7 @@ não conseguiu** — foi isso que permitiu consertar todos os erros conversando.
   ┌─────────┐                │   cerebro.py ──── a ÚNICA parte que  │
   │HuberChat├───────────────▶│        │          sabe qual modelo é  │
   └─────────┘                │        ▼                              │
-       ▲                     │  ferramentas.py ─ 28 funções puras    │
+       ▲                     │  ferramentas.py ─ 29 funções puras    │
        │  resposta           │        │                              │
        └─────────────────────┤        ▼                              │
                              │     casa.db  ◀── quem lembra          │
@@ -161,7 +161,7 @@ As outras: `lista_compras`, `tarefas`, `fatos`, `bancos`, `movimentos`,
 
 ---
 
-## As 28 ferramentas
+## As 29 ferramentas
 
 <details>
 <summary><b>Contas a pagar</b></summary>
@@ -179,14 +179,16 @@ As outras: `lista_compras`, `tarefas`, `fatos`, `bancos`, `movimentos`,
 <summary><b>Lista de compras</b></summary>
 
 `lista_add` · `lista_ver` · `lista_marcar_comprado` · `lista_corrigir`
+
+Com contexto (*mercado*, *casa*) e preço estimado — os dois opcionais.
 </details>
 
 <details>
 <summary><b>Dinheiro</b></summary>
 
 `banco_salvar` · `gasto_registrar` · `entrada_registrar` · `compra_parcelada` ·
-`saldo_ver` · `extrato` · `resumo` · `quanto_sobra` · `estornar` ·
-`parcelas_cancelar` · `limite_definir`
+`saldo_ver` · `extrato` · `resumo` · `gastos_periodo` · `quanto_sobra` ·
+`estornar` · `parcelas_cancelar` · `limite_definir`
 </details>
 
 <details>
@@ -222,11 +224,12 @@ $ python3 teste_dinheiro.py        49/49    saldo, estorno, limites, virada do m
 $ python3 teste_tarefas.py         30/30    prazo, recorrência, aviso
 $ python3 teste_desfazer.py        45/45    desfazer, aposentar, arquivar
 $ python3 teste_parcelas.py        26/26    parcelamento e histórico
+$ python3 teste_lista_dinheiro.py  24/24    contexto e preço na lista, período livre
 $ python3 teste_webhook.py         57/57    assinatura, replay, roteamento HTTP
 $ python3 teste_roteamento.py      18/18    frase → ferramenta certa (usa a API)
 ```
 
-**254 verificações.** Todas leem o banco por SQL — nenhuma confia no que a
+**278 verificações.** Todas leem o banco por SQL — nenhuma confia no que a
 função devolveu. Rodam em banco descartável: `casa.db` nunca é tocada.
 
 O teste que mais importa continua sendo o mais simples:

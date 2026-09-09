@@ -228,23 +228,45 @@ def _achar_item(c, texto):
     return next(l for l in linhas if l["id"] == achado[0])
 
 
-def lista_add(item, quem=None):
-    """Põe um item na lista. Se já estiver pendente, não duplica."""
+def lista_add(item, onde=None, valor=None, quem=None):
+    """Põe um item na lista. Se já estiver pendente, não duplica.
+
+    `onde` separa mercado de casa — sem isso o sabão aparece junto com o
+    guarda-roupa quando alguém pergunta o que falta comprar.
+    `valor` é o preço estimado; os dois são OPCIONAIS e item sem valor entra
+    normal, só fica de fora da soma.
+    """
     item = _norm(item)
     if not item:
         return {"ok": False, "erro": "item vazio"}
+    onde = _norm(onde) or None
+    if valor is not None:
+        try:
+            valor = abs(float(valor)) or None
+        except (TypeError, ValueError):
+            return {"ok": False, "erro": f"valor inválido: {valor!r}"}
 
     with _conn() as c:
         pendente = c.execute(
-            "SELECT id FROM lista_compras WHERE item = ? AND comprado = 0", (item,)
-        ).fetchone()
+            "SELECT id, onde, valor FROM lista_compras WHERE item = ? AND comprado = 0",
+            (item,)).fetchone()
         if pendente:
-            return {"ok": True, "acao": "ja_estava_na_lista", "id": pendente["id"], "item": item}
+            # já está lá: aproveita pra completar o que faltava
+            novos = {}
+            if onde and not pendente["onde"]:
+                novos["onde"] = onde
+            if valor and not pendente["valor"]:
+                novos["valor"] = valor
+            for k, v in novos.items():
+                c.execute(f"UPDATE lista_compras SET {k} = ? WHERE id = ?", (v, pendente["id"]))
+            return {"ok": True, "acao": "completado" if novos else "ja_estava_na_lista",
+                    "id": pendente["id"], "item": item,
+                    "onde": onde or pendente["onde"], "valor": valor or pendente["valor"]}
         cur = c.execute(
-            "INSERT INTO lista_compras (item, quem_pediu, criado_em) VALUES (?,?,?)",
-            (item, quem, _agora(c)),
-        )
-    return {"ok": True, "acao": "adicionado", "id": cur.lastrowid, "item": item}
+            "INSERT INTO lista_compras (item, onde, valor, quem_pediu, criado_em)"
+            " VALUES (?,?,?,?,?)", (item, onde, valor, quem, _agora(c)))
+    return {"ok": True, "acao": "adicionado", "id": cur.lastrowid, "item": item,
+            "onde": onde, "valor": valor}
 
 
 def lista_marcar_comprado(item, quem=None):
@@ -263,16 +285,37 @@ def lista_marcar_comprado(item, quem=None):
             "comprado_em": agora}
 
 
-def lista_ver(incluir_comprados=False):
-    """O que ainda falta comprar."""
-    sql = ("SELECT id, item, quem_pediu, criado_em, comprado, comprado_em, comprado_por"
-           " FROM lista_compras")
+def lista_ver(onde=None, incluir_comprados=False):
+    """O que ainda falta comprar, com o total do que tem preço estimado.
+
+    O total diz QUANTOS itens entraram nele — senão "R$ 4.300" parece o total
+    de tudo quando metade da lista está sem preço.
+    """
+    sql = ("SELECT id, item, onde, valor, quem_pediu, criado_em, comprado,"
+           " comprado_em, comprado_por FROM lista_compras")
+    onde_sql, args = [], []
     if not incluir_comprados:
-        sql += " WHERE comprado = 0"
-    sql += " ORDER BY id"
+        onde_sql.append("comprado = 0")
+    if onde:
+        onde_sql.append("onde = ?")
+        args.append(_norm(onde))
+    if onde_sql:
+        sql += " WHERE " + " AND ".join(onde_sql)
+    sql += " ORDER BY onde IS NULL, onde, id"
     with _conn() as c:
-        linhas = [dict(l) for l in c.execute(sql).fetchall()]
-    return {"ok": True, "itens": linhas, "quantidade": len(linhas)}
+        linhas = [dict(l) for l in c.execute(sql, args).fetchall()]
+
+    com_preco = [l for l in linhas if l["valor"]]
+    r = {"ok": True, "itens": linhas, "quantidade": len(linhas)}
+    if com_preco:
+        r["total_estimado"] = round(sum(l["valor"] for l in com_preco), 2)
+        r["itens_com_preco"] = len(com_preco)
+        r["itens_sem_preco"] = len(linhas) - len(com_preco)
+    if onde:
+        r["onde"] = _norm(onde)
+    else:
+        r["contextos"] = sorted({l["onde"] for l in linhas if l["onde"]})
+    return r
 
 
 # ---------------------------------------------------------------- fatos
@@ -634,22 +677,37 @@ def limite_definir(categoria, valor_mes, quem=None):
             "gasto_no_mes": round(gasto, 2)}
 
 
-def lista_corrigir(item, novo_nome, quem=None):
-    """Troca o NOME de um item da lista. Não mexe em comprado.
+def lista_corrigir(item, novo_nome=None, onde=None, valor=None, quem=None):
+    """Troca nome, contexto e/ou preço de um item. Não mexe em comprado.
 
     Existe porque sem ela o modelo improvisa: marca o item errado como
     comprado e cria outro — e aí o banco guarda uma compra que não houve.
     """
-    novo = _norm(novo_nome)
-    if not novo:
-        return {"ok": False, "erro": "nome novo vazio"}
+    if novo_nome is None and onde is None and valor is None:
+        return {"ok": False, "erro": "não disse o que corrigir"}
     with _conn() as c:
         alvo = _achar_item(c, item)
         if not alvo:
             return {"ok": False, "erro": f"'{_norm(item)}' não está na lista de pendentes"}
-        c.execute("UPDATE lista_compras SET item = ? WHERE id = ?", (novo, alvo["id"]))
-    return {"ok": True, "acao": "corrigido", "id": alvo["id"],
-            "antes": alvo["item"], "agora": novo}
+        campos, args = [], []
+        if novo_nome is not None:
+            novo = _norm(novo_nome)
+            if not novo:
+                return {"ok": False, "erro": "nome novo vazio"}
+            campos.append("item = ?"); args.append(novo)
+        if onde is not None:
+            campos.append("onde = ?"); args.append(_norm(onde) or None)
+        if valor is not None:
+            try:
+                campos.append("valor = ?"); args.append(abs(float(valor)) or None)
+            except (TypeError, ValueError):
+                return {"ok": False, "erro": f"valor inválido: {valor!r}"}
+        c.execute(f"UPDATE lista_compras SET {', '.join(campos)} WHERE id = ?",
+                  (*args, alvo["id"]))
+        agora = c.execute("SELECT item, onde, valor FROM lista_compras WHERE id = ?",
+                          (alvo["id"],)).fetchone()
+    return {"ok": True, "acao": "corrigido", "id": alvo["id"], "antes": alvo["item"],
+            "item": agora["item"], "onde": agora["onde"], "valor": agora["valor"]}
 
 
 FERRAMENTAS.update({
@@ -1056,3 +1114,43 @@ FERRAMENTAS.update({
     "parcelas_cancelar": parcelas_cancelar,
     "historico_ver": historico_ver,
 })
+
+
+def gastos_periodo(desde, ate=None, categoria=None, banco=None):
+    """Gasto por categoria entre duas datas — atravessa meses.
+
+    O resumo olha um mês e o comparar_com olha dois. Esta responde "quanto
+    gastei com mercado nos últimos 3 meses?".
+    """
+    with _conn() as c:
+        d = c.execute("SELECT date(?)", (str(desde).strip(),)).fetchone()[0]
+        if not d:
+            return {"ok": False, "erro": f"data inicial inválida: {desde!r}"}
+        a = c.execute("SELECT date(?)", (str(ate).strip(),)).fetchone()[0] if ate else _hoje(c)
+        if not a:
+            return {"ok": False, "erro": f"data final inválida: {ate!r}"}
+        if d > a:
+            d, a = a, d
+
+        sql = ("SELECT m.categoria, SUM(-m.valor) AS gasto, COUNT(*) AS n"
+               "  FROM movimentos m JOIN bancos b ON b.id = m.banco_id"
+               " WHERE m.estornado = 0 AND m.valor < 0 AND m.quando BETWEEN ? AND ?")
+        args = [d, a]
+        if categoria:
+            sql += " AND m.categoria = ?"; args.append(_categoria(categoria))
+        if banco:
+            sql += " AND b.nome = ?"; args.append(_norm(banco))
+        sql += " GROUP BY m.categoria ORDER BY gasto DESC"
+        cats = [{"categoria": l["categoria"], "gasto": round(l["gasto"], 2),
+                 "lancamentos": l["n"]} for l in c.execute(sql, args).fetchall()]
+        meses = c.execute("SELECT COUNT(DISTINCT competencia) FROM movimentos"
+                          " WHERE estornado = 0 AND quando BETWEEN ? AND ?",
+                          (d, a)).fetchone()[0] or 1
+
+    total = sum(x["gasto"] for x in cats)
+    return {"ok": True, "desde": d, "ate": a, "categorias": cats,
+            "total_gasto": round(total, 2), "meses": meses,
+            "media_por_mes": round(total / meses, 2)}
+
+
+FERRAMENTAS["gastos_periodo"] = gastos_periodo

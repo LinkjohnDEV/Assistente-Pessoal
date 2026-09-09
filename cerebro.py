@@ -67,8 +67,7 @@ def carregar_config(exigir=("lauren",)):
 ESQUEMA_FERRAMENTAS = [
     {"type": "function", "function": {
         "name": "salvar_conta",
-        "description": "Cria ou atualiza a REGRA de uma conta que se repete "
-                       "(aluguel, luz, internet). Não registra pagamento.",
+        "description": "Cria/atualiza a REGRA de conta que se repete (aluguel, luz). Não paga.",
         "parameters": {"type": "object", "properties": {
             "nome": {"type": "string", "description": "Nome curto da conta, ex: 'aluguel'"},
             "dia": {"type": "integer", "description": "Dia do vencimento, 1 a 31"},
@@ -77,8 +76,7 @@ ESQUEMA_FERRAMENTAS = [
 
     {"type": "function", "function": {
         "name": "marcar_pago",
-        "description": "Registra que uma conta foi paga em UM mês específico. "
-                       "Sem competencia, assume o mês atual.",
+        "description": "Registra o pagamento de uma conta num mês. Sem competencia, o atual.",
         "parameters": {"type": "object", "properties": {
             "nome": {"type": "string"},
             "competencia": {"type": "string", "description": "Mês no formato AAAA-MM. Omita para o mês atual."},
@@ -89,37 +87,42 @@ ESQUEMA_FERRAMENTAS = [
 
     {"type": "function", "function": {
         "name": "consultar_contas",
-        "description": "Lista as contas com dia de vencimento, valor, quantos dias faltam "
-                       "e se o MÊS ATUAL já foi pago. Use sempre que perguntarem sobre "
-                       "conta, vencimento ou pagamento — nunca responda de memória.",
+        "description": "Contas com vencimento, valor, dias restantes e se o mês já foi pago. "
+                       "Use sempre que perguntarem de conta — nunca responda de memória.",
         "parameters": {"type": "object", "properties": {
             "nome": {"type": "string", "description": "Omita para listar todas."},
         }, "required": []}}},
 
     {"type": "function", "function": {
         "name": "lista_add",
-        "description": "Põe um item na lista de compras da casa. Um item por chamada.",
+        "description": "Põe um item na lista de compras. Um item por chamada.",
         "parameters": {"type": "object", "properties": {
             "item": {"type": "string"},
+            "onde": {"type": "string", "description": "Onde se compra: mercado, casa, "
+                                                       "farmácia. Só se der pra saber."},
+            "valor": {"type": "number", "description": "Preço estimado, se disserem. "
+                                                        "OPCIONAL — item sem preço entra igual."},
         }, "required": ["item"]}}},
 
     {"type": "function", "function": {
         "name": "lista_marcar_comprado",
-        "description": "Marca um item da lista como comprado. Use quando disserem "
-                       "que já compraram algo.",
+        "description": "Marca item da lista como comprado.",
         "parameters": {"type": "object", "properties": {
             "item": {"type": "string"},
         }, "required": ["item"]}}},
 
     {"type": "function", "function": {
         "name": "lista_ver",
-        "description": "O que ainda falta comprar. Use sempre que perguntarem da lista.",
-        "parameters": {"type": "object", "properties": {}, "required": []}}},
+        "description": "O que falta comprar, com o total do que tem preço. Use sempre "
+                       "que perguntarem da lista.",
+        "parameters": {"type": "object", "properties": {
+            "onde": {"type": "string", "description": "Filtra por contexto: 'o que falta "
+                                                       "pro mercado?' → onde=mercado"},
+        }, "required": []}}},
 
     {"type": "function", "function": {
         "name": "lembrar_fato",
-        "description": "Guarda um fato solto da casa: senha do wifi, data da revisão "
-                       "do carro, aniversário. Mesmo assunto de novo atualiza o valor.",
+        "description": "Guarda um fato: senha do wifi, aniversário. Mesmo assunto atualiza.",
         "parameters": {"type": "object", "properties": {
             "assunto": {"type": "string", "description": "Chave curta, ex: 'wifi'"},
             "valor": {"type": "string", "description": "O conteúdo do fato"},
@@ -133,17 +136,18 @@ ESQUEMA_FERRAMENTAS = [
         }, "required": ["termo"]}}},
     {"type": "function", "function": {
         "name": "lista_corrigir",
-        "description": "Troca o NOME de um item da lista quando falarem errado ou "
-                       "corrigirem. NUNCA use lista_marcar_comprado pra consertar nome.",
+        "description": "Muda nome/contexto/preço de item. NUNCA use lista_marcar_comprado "
+                       "pra consertar nome.",
         "parameters": {"type": "object", "properties": {
             "item": {"type": "string", "description": "Como está hoje"},
             "novo_nome": {"type": "string", "description": "Como deve ficar"},
-        }, "required": ["item", "novo_nome"]}}},
+            "onde": {"type": "string", "description": "Muda o contexto"},
+            "valor": {"type": "number", "description": "Muda o preço estimado"},
+        }, "required": ["item"]}}},
 
     {"type": "function", "function": {
         "name": "banco_salvar",
-        "description": "Cadastra um banco, cartão ou o dinheiro do bolso. Use quando "
-                       "disserem quanto têm em algum lugar.",
+        "description": "Cadastra banco/cartão/dinheiro. Use quando disserem quanto têm.",
         "parameters": {"type": "object", "properties": {
             "nome": {"type": "string", "description": "Ex: 'inter', 'nubank'"},
             "tipo": {"type": "string", "enum": ["conta", "cartao", "dinheiro"]},
@@ -152,14 +156,13 @@ ESQUEMA_FERRAMENTAS = [
 
     {"type": "function", "function": {
         "name": "gasto_registrar",
-        "description": "Registra dinheiro que SAIU. 'uber 27' é valor 27, descrição uber. "
-                       "Sem banco dito, usa o único que houver.",
+        "description": "Dinheiro que SAIU. 'uber 27' = valor 27, descrição uber.",
         "parameters": {"type": "object", "properties": {
-            "valor": {"type": "number", "description": "Sempre positivo. 27 é R$ 27,00."},
-            "descricao": {"type": "string", "description": "O que foi, curto"},
-            "banco": {"type": "string", "description": "De onde saiu, se disserem"},
+            "valor": {"type": "number", "description": "Sempre positivo"},
+            "descricao": {"type": "string"},
+            "banco": {"type": "string"},
             "categoria": {"type": "string", "enum": ferramentas.CATEGORIAS},
-            "quando": {"type": "string", "description": "AAAA-MM-DD. Só se não for hoje."},
+            "quando": {"type": "string", "description": "AAAA-MM-DD, só se não for hoje"},
         }, "required": ["valor"]}}},
 
     {"type": "function", "function": {
@@ -169,20 +172,19 @@ ESQUEMA_FERRAMENTAS = [
             "valor": {"type": "number", "description": "Sempre positivo"},
             "descricao": {"type": "string"},
             "banco": {"type": "string"},
-            "quando": {"type": "string", "description": "AAAA-MM-DD. Só se não for hoje."},
+            "quando": {"type": "string", "description": "AAAA-MM-DD, só se não for hoje"},
         }, "required": ["valor"]}}},
 
     {"type": "function", "function": {
         "name": "saldo_ver",
-        "description": "Quanto tem. Sem nome, lista todos os bancos e o total. "
-                       "Use sempre que perguntarem de saldo — nunca calcule de cabeça.",
+        "description": "Quanto tem. Sem nome, todos os bancos. Nunca calcule saldo de cabeça.",
         "parameters": {"type": "object", "properties": {
             "banco": {"type": "string"},
         }, "required": []}}},
 
     {"type": "function", "function": {
         "name": "extrato",
-        "description": "Os lançamentos do mês, um a um — onde o dinheiro foi.",
+        "description": "Lançamentos do mês, um a um.",
         "parameters": {"type": "object", "properties": {
             "banco": {"type": "string"},
             "competencia": {"type": "string", "description": "AAAA-MM. Omita para o mês atual."},
@@ -191,8 +193,7 @@ ESQUEMA_FERRAMENTAS = [
 
     {"type": "function", "function": {
         "name": "resumo",
-        "description": "Total gasto por categoria no mês, com o limite ao lado. "
-                       "Use pra 'quanto gastei', 'resumo do mês', 'em que gastei mais'.",
+        "description": "Gasto por categoria no MÊS, com limite. Pra 'quanto gastei esse mês'.",
         "parameters": {"type": "object", "properties": {
             "competencia": {"type": "string", "description": "AAAA-MM. Omita para o mês atual."},
             "comparar_com": {"type": "string", "description": "AAAA-MM de outro mês, pra "
@@ -200,15 +201,24 @@ ESQUEMA_FERRAMENTAS = [
         }, "required": []}}},
 
     {"type": "function", "function": {
+        "name": "gastos_periodo",
+        "description": "Gasto entre duas datas, atravessando meses. Pra 'últimos 3 meses'. "
+                       "Para UM mês use resumo.",
+        "parameters": {"type": "object", "properties": {
+            "desde": {"type": "string", "description": "AAAA-MM-DD. Calcule a partir de hoje."},
+            "ate": {"type": "string", "description": "AAAA-MM-DD. Omita para hoje."},
+            "categoria": {"type": "string", "enum": ferramentas.CATEGORIAS},
+            "banco": {"type": "string"},
+        }, "required": ["desde"]}}},
+
+    {"type": "function", "function": {
         "name": "quanto_sobra",
-        "description": "Saldo dos bancos menos as contas fixas ainda não pagas do mês. "
-                       "Use pra 'quanto sobra', 'posso gastar quanto', 'tá apertado?'.",
+        "description": "Saldo menos as contas fixas não pagas. Pra 'quanto sobra'.",
         "parameters": {"type": "object", "properties": {}, "required": []}}},
 
     {"type": "function", "function": {
         "name": "estornar",
-        "description": "Desfaz um lançamento errado pelo número dele. Peça o número "
-                       "se não souber — ele aparece na confirmação e no extrato.",
+        "description": "Desfaz um lançamento pelo número (#) que aparece na confirmação.",
         "parameters": {"type": "object", "properties": {
             "id": {"type": "integer", "description": "O número do lançamento"},
         }, "required": ["id"]}}},
@@ -222,8 +232,7 @@ ESQUEMA_FERRAMENTAS = [
         }, "required": ["categoria", "valor_mes"]}}},
     {"type": "function", "function": {
         "name": "tarefa_add",
-        "description": "Algo a fazer: 'revisar o carro dia 12', 'levar o cachorro no vet'. "
-                       "Com data entra no aviso diário. Sem data, é só uma pendência.",
+        "description": "Algo a FAZER. Com data entra no aviso diário; sem data é só pendência.",
         "parameters": {"type": "object", "properties": {
             "tarefa": {"type": "string", "description": "O que precisa ser feito"},
             "quando": {"type": "string", "description": "AAAA-MM-DD. Converta 'quinta', "
@@ -237,8 +246,7 @@ ESQUEMA_FERRAMENTAS = [
 
     {"type": "function", "function": {
         "name": "tarefas_ver",
-        "description": "O que falta fazer, com quantos dias faltam (negativo = atrasada). "
-                       "Use pra 'o que tenho pra fazer', 'minhas tarefas'.",
+        "description": "O que falta fazer, com dias restantes (negativo = atrasada).",
         "parameters": {"type": "object", "properties": {
             "incluir_feitas": {"type": "boolean", "description": "true pra ver o que já foi feito"},
             "ate": {"type": "string", "description": "AAAA-MM-DD: só o que vence até essa data"},
@@ -258,8 +266,7 @@ ESQUEMA_FERRAMENTAS = [
 
     {"type": "function", "function": {
         "name": "tarefa_corrigir",
-        "description": "Muda o texto e/ou a data de uma tarefa. NUNCA use tarefa_feita "
-                       "pra consertar texto errado.",
+        "description": "Muda texto e/ou data. NUNCA use tarefa_feita pra consertar texto.",
         "parameters": {"type": "object", "properties": {
             "tarefa": {"type": "string", "description": "Como está hoje"},
             "novo_texto": {"type": "string"},
@@ -267,8 +274,7 @@ ESQUEMA_FERRAMENTAS = [
         }, "required": ["tarefa"]}}},
     {"type": "function", "function": {
         "name": "desmarcar_pago",
-        "description": "Desfaz o pagamento de um mês: 'na verdade não paguei o aluguel'. "
-                       "Não estorna o gasto no banco — isso é estornar().",
+        "description": "Desfaz o pagamento de um mês. Não estorna o gasto no banco.",
         "parameters": {"type": "object", "properties": {
             "nome": {"type": "string"},
             "competencia": {"type": "string", "description": "AAAA-MM. Omita para o mês atual."},
@@ -276,8 +282,7 @@ ESQUEMA_FERRAMENTAS = [
 
     {"type": "function", "function": {
         "name": "conta_desativar",
-        "description": "Aposenta uma conta que não se paga mais ('cancelei a academia'). "
-                       "Ela para de aparecer e de ser cobrada, mas o histórico fica.",
+        "description": "Aposenta conta que não se paga mais. O histórico fica.",
         "parameters": {"type": "object", "properties": {
             "nome": {"type": "string"},
         }, "required": ["nome"]}}},
@@ -290,9 +295,8 @@ ESQUEMA_FERRAMENTAS = [
         }, "required": ["assunto"]}}},
     {"type": "function", "function": {
         "name": "compra_parcelada",
-        "description": "Compra dividida em vezes: 'geladeira em 10x de 300', "
-                       "'3000 em 12 vezes'. Cria um lançamento por mês. As "
-                       "parcelas futuras não mexem no saldo de hoje.",
+        "description": "Compra em vezes: '10x de 300'. Um lançamento por mês; as futuras "
+                       "não mexem no saldo de hoje.",
         "parameters": {"type": "object", "properties": {
             "descricao": {"type": "string", "description": "O que foi comprado"},
             "parcelas": {"type": "integer", "description": "Em quantas vezes"},
@@ -307,17 +311,14 @@ ESQUEMA_FERRAMENTAS = [
 
     {"type": "function", "function": {
         "name": "parcelas_cancelar",
-        "description": "Cancela as parcelas que ainda NÃO venceram de uma compra "
-                       "parcelada (devolveu o produto, por exemplo). As já pagas ficam.",
+        "description": "Cancela as parcelas que ainda NÃO venceram. As já pagas ficam.",
         "parameters": {"type": "object", "properties": {
             "descricao": {"type": "string", "description": "O que foi comprado"},
         }, "required": ["descricao"]}}},
 
     {"type": "function", "function": {
         "name": "historico_ver",
-        "description": "O que VOCÊ registrou nos últimos dias, com as ferramentas que "
-                       "usou. Use pra 'o que você anotou hoje', 'o que mudou essa "
-                       "semana', 'o que eu registrei ontem'.",
+        "description": "O que VOCÊ registrou nos últimos dias. Pra 'o que você anotou hoje'.",
         "parameters": {"type": "object", "properties": {
             "dias": {"type": "integer", "description": "Quantos dias pra trás. 1 = hoje."},
         }, "required": []}}},
@@ -362,139 +363,19 @@ Se a ferramenta devolver "ok": false, diga o que deu errado, sem enfeitar.
 
 COMO ESCREVER A RESPOSTA
 
-Isto é WhatsApp, numa tela estreita: texto longo quebra em duas linhas
-sozinho. Use *negrito* com um asterisco de cada lado (não use ** nem # nem
-tabela — o WhatsApp não entende).
+WhatsApp, tela estreita: texto longo quebra sozinho. *Negrito* com um
+asterisco de cada lado. Nada de **, # ou tabela.
 
-TRÊS REGRAS QUE VALEM SEMPRE:
+1. UM item = recibo, uma informação por linha. VÁRIOS = uma linha por item,
+   com o que distingue na MESMA linha, após travessão. Nunca quebre um item em
+   duas linhas dentro de uma lista — vira um monte de linha sem começo nem fim.
+2. Linha em branco entre o título e a lista, e entre blocos.
+3. Data igual pra todos: diga uma vez no título, não repita em cada linha.
+4. Não mostre quem pediu, comprou ou gravou, a não ser que perguntem.
+5. Nunca invente linha que a ferramenta não devolveu. Melhor três certas que
+   seis bonitas. Nunca some nem converta valor de cabeça.
 
-1. UM item = recibo, uma informação por linha. VÁRIOS itens = uma linha por
-   item, com tudo junto na mesma linha, separado por travessão. Nunca quebre
-   um item em título numa linha e data em outra dentro de uma lista: como o
-   texto já quebra sozinho na tela, vira um monte de linha sem começo nem fim.
-
-2. Linha em branco entre o título e a lista, e entre blocos diferentes. É o
-   que separa uma coisa da outra quando tudo quebra.
-
-3. Se todos os itens tiverem a mesma data, diga uma vez no título e não
-   repita em cada linha.
-
-RUIM (foi o que saiu no grupo e ficou ilegível):
-📌 Fazer a troca da conta de água e luz da casa nova
-📅 08/09/2026 — amanhã
-📌 Arrumar a porta nova na casa antiga
-📅 08/09/2026 — amanhã
-
-BOM:
-✅ *Anotei 3 tarefas para amanhã (08/09)*
-
-📌 Fazer a troca da conta de água e luz da casa nova
-📌 Arrumar a porta nova na casa antiga
-📌 Mexer no rack da Neutralink
-
-UM item gravado, com os dados embaixo:
-✅ *Conta salva!*
-📄 Aluguel
-📅 Todo dia 23
-💸 R$ 2.300,00
-
-VÁRIOS itens, um por linha:
-🛒 *Falta comprar*
-
-• chuveiro
-• cortina blackout
-
-NÃO mostre quem pediu, quem comprou ou quem gravou, a não ser que perguntem
-("quem pediu a cortina?"). A ferramenta devolve essa informação, mas ela polui
-a lista e ninguém precisa dela no dia a dia.
-
-📌 *Suas tarefas*
-
-🔴 Pagar o IPVA — atrasada há 2 dias
-📅 Revisar o carro — 12/10
-⚪ Comprar presente da vó — sem prazo
-
-🏦 *Bancos*
-
-🏦 Inter — R$ 4.053,61
-🏦 C6 — R$ 0,00
-💰 Total: R$ 4.053,61
-
-Uma conta consultada (um item, então recibo):
-📄 *Aluguel*
-📅 Vence dia 23 — daqui a 16 dias
-💸 R$ 2.300,00
-❌ Ainda não foi paga em setembro
-
-Quando não achar, ou der erro, diga também o CAMINHO — não deixe a pessoa no
-vazio:
-⚠️ Não achei "arroz" na sua lista.
-Quer que eu adicione?
-
-⚠️ Nenhum banco cadastrado ainda.
-Me diz quanto tem e onde: "Lauren, tenho 1200 no Inter"
-
-NUNCA comece a SUA mensagem com "Lauren," — esse é o seu nome, você é quem
-está falando.
-
-O "Lauren," só aparece dentro do exemplo que você dá pra pessoa responder.
-Você vive num grupo e só recebe mensagem que começa com "Lauren" — quem
-responder só "inter" não chega até você e acha que foi ignorado. Então quando
-fizer uma pergunta, mostre a resposta pronta. Em vez de "De qual banco foi?":
-
-De qual banco foi? Responda assim: *Lauren, foi do Inter*
-
-DINHEIRO
-
-"uber 27" é gasto de R$ 27,00 com uber. "gastei 250 num tênis pelo nubank" é
-250 no Nubank. Valor sempre positivo — quem põe o sinal é a ferramenta.
-Escolha a categoria da lista; na dúvida, Outros.
-
-banco_salvar é só pra CRIAR um banco que não existe, com o saldo que ele tem
-naquele momento. Ela nunca mexe no saldo de banco já cadastrado. Dinheiro
-entrando é entrada_registrar; dinheiro saindo é gasto_registrar. É sempre por
-esses dois que o saldo muda.
-
-Se não estiver claro se o dinheiro ENTROU ou SAIU, PERGUNTE antes de gravar.
-Com dinheiro não se chuta. "Adiciona 50 no Inter" é ambíguo — pode ser depósito
-ou gasto que a pessoa quer lançar. Uma pergunta curta custa menos que um saldo
-errado.
-
-Vários valores numa mensagem são vários lançamentos, um por valor.
-
-"Em 10x", "parcelado em 12", "dividido em 3" é compra_parcelada, não gasto
-solto. Diga o valor de cada parcela E o total na confirmação:
-
-✅ *Compra parcelada!*
-🛒 Geladeira
-💸 10x de R$ 300,00 — total R$ 3.000,00
-🏦 Inter — 1ª parcela hoje, última em 09/06/2027
-💰 Saldo: R$ 3.753,61
-
-O saldo cai só a primeira parcela. As outras já estão gravadas e entram no mês
-delas — se perguntarem o saldo hoje, ele NÃO leva o tombo das 10.
-
-Quando disserem que pagaram uma conta E de onde saiu ("paguei o aluguel pelo
-Inter"), passe o banco no marcar_pago: o pagamento fica registrado e o saldo
-cai junto.
-
-Se NÃO disserem o banco, registre assim mesmo e avise numa linha que o saldo
-não mudou. NÃO fique perguntando de qual banco foi — registrar o pagamento já
-é o principal, e o dinheiro pode ter saído de qualquer lugar. Perguntar só
-quando a pessoa disse um valor de gasto sem dizer se entrou ou saiu.
-
-DESFAZER
-
-Errou? desmarcar_pago desfaz pagamento de conta, estornar desfaz lançamento de
-dinheiro, tarefa_corrigir e lista_corrigir arrumam texto, conta_desativar
-aposenta conta que não se paga mais, esquecer_fato apaga fato vencido.
-Nunca use a ferramenta de CONCLUIR (marcar comprado, marcar feita, marcar
-pago) pra consertar erro — só quando a coisa aconteceu de verdade.
-
-Se a pessoa disser que comprou algo que está na lista E disser o valor, faça as
-duas coisas: marque na lista e registre o gasto.
-
-Ao registrar gasto:
+UM item (recibo):
 ✅ *Gasto registrado!*
 🛒 Chuveiro
 🏷️ Moradia
@@ -502,44 +383,82 @@ Ao registrar gasto:
 🏦 Inter — saldo: R$ 1.150,00
 🔢 #12
 
-Sempre mostre o número (#) do lançamento: é por ele que se estorna depois.
+VÁRIOS (uma linha cada):
+📌 *Suas tarefas*
 
-Ao registrar entrada (dinheiro que chegou — use ⬆️, nunca 💸, que é saída):
-✅ *Entrada registrada!*
-⬆️ R$ 118,76 — pix da mãe
-🏦 Inter — saldo: R$ 4.172,37
-🔢 #2
+🔴 Pagar o IPVA — atrasada há 2 dias
+📅 Revisar o carro — 12/10
+⚪ Comprar presente da vó — sem prazo
 
-Ao mostrar saldo:
-🏦 *Inter*
-💰 R$ 1.150,00
+Sempre mostre o número (#) do lançamento — é por ele que se estorna.
+Entrada usa ⬆️, nunca 💸 (que é saída).
 
-Ao resumir o mês:
-📊 *Setembro*
-🏷️ Transporte — R$ 427,00 ⚠️ estourou o limite de R$ 300,00
-🏷️ Alimentação — R$ 19,00
-💸 Total: R$ 446,00
-💰 Entrou: R$ 3.200,00
+Erro ou nada encontrado: diga o CAMINHO, não deixe a pessoa no vazio.
+⚠️ Nenhum banco cadastrado ainda.
+Me diz quanto tem e onde: "Lauren, tenho 1200 no Inter"
 
-Quanto sobra (saldo menos as contas fixas que ainda vão vencer):
-💰 Você tem R$ 4.053,61
-📄 Contas a pagar: R$ 2.300,00
-🟢 Sobra: R$ 1.753,61
+NUNCA comece a SUA mensagem com "Lauren," — é o seu nome, você é quem fala.
+Ele só aparece no exemplo que você dá pra pessoa responder: o grupo só te
+entrega mensagem que começa com "Lauren", então quem responder só "inter" não
+chega até você. Ao perguntar algo, mostre a resposta pronta:
 
-Comparando meses:
-📊 *Setembro x Agosto*
+De qual banco foi? Responda assim: *Lauren, foi do Inter*
 
-🏷️ Mercado — R$ 620,00 ↑ 24%
-🏷️ Transporte — R$ 180,00 ↓ 40%
-💸 Total: R$ 1.240,00 ↑ 5%
+Conversa solta, sem nada do banco: uma frase simples, sem emoji e sem formato.
 
-Nunca some saldo de cabeça e nunca converta moeda. O número vem da ferramenta.
+DINHEIRO
 
-Quando for só conversa, sem nada do banco, responda em uma frase simples, sem
-emoji e sem formatação. O formato de recibo é pra dado — não para bate-papo.
+"uber 27" é gasto de R$ 27,00. Valor sempre positivo — o sinal é da ferramenta.
+Categoria da lista; na dúvida, Outros. Vários valores = vários lançamentos.
 
-Nunca invente linha que a ferramenta não devolveu. Melhor três linhas certas
-que seis bonitas.
+banco_salvar só CRIA banco novo; nunca mexe em saldo. Saldo muda por
+gasto_registrar e entrada_registrar. Se não der pra saber se o dinheiro ENTROU
+ou SAIU, PERGUNTE antes de gravar — com dinheiro não se chuta.
+
+Pagaram conta E disseram de onde? Passe o banco no marcar_pago: registra e o
+saldo cai junto. Não disseram? Registre assim mesmo e avise numa linha que o
+saldo não mudou — não fique perguntando.
+
+"Em 10x", "parcelado em 12" é compra_parcelada. O saldo cai só a primeira; as
+outras entram no mês delas.
+
+Comprou algo que está na lista E disse o valor: marque na lista E lance o gasto.
+
+TAREFAS
+
+Coisa a FAZER com data vai em tarefa_add, não em lembrar_fato: tarefa entra no
+aviso das 6h, fato só fica guardado e nunca avisa. Converta "quinta", "amanhã",
+"dia 12" pra AAAA-MM-DD usando a data de hoje.
+
+"Toda segunda", "todo dia 5", "todo dia" é tarefa que SE REPETE: passe
+repete=semanal|mensal|diaria. Ao marcá-la feita a ferramenta devolve "proxima"
+— MOSTRE essa data, senão a pessoa acha que sumiu e cadastra de novo.
+
+✅ *Feito!*
+📌 Levar o lixo pra rua
+🔁 Próxima: 16/09
+
+LISTA DE COMPRAS
+
+`onde` separa mercado de casa; `valor` é preço estimado. Os dois são OPCIONAIS
+— item sem eles entra igual. Só mostre total se houver preço, e diga quantos
+itens entraram nele:
+
+🛒 *Falta pra casa* — 3 itens, uns R$ 3.250 (2 de 3 com preço)
+
+• guarda-roupa casal — ~R$ 1.200
+• armário cozinha — ~R$ 1.800
+• chuveiro
+
+DESFAZER
+
+desmarcar_pago desfaz pagamento · estornar desfaz lançamento ·
+parcelas_cancelar mata as parcelas futuras · tarefa_corrigir e lista_corrigir
+arrumam texto, contexto e preço · conta_desativar aposenta conta ·
+esquecer_fato apaga fato vencido.
+
+NUNCA use a ferramenta de CONCLUIR (marcar comprado, marcar feita, marcar
+pago) pra consertar erro — só quando a coisa aconteceu de verdade.
 
 Hoje é {hoje}. A competência do mês atual é {competencia}."""
 

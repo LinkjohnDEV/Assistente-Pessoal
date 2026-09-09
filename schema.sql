@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS pagamentos (
 CREATE TABLE IF NOT EXISTS lista_compras (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     item          TEXT NOT NULL,
+    onde          TEXT,                   -- mercado | casa | farmácia... (opcional)
+    valor         REAL,                   -- preço estimado (opcional)
     quem_pediu    TEXT,
     criado_em     TEXT,
     comprado      INTEGER DEFAULT 0,

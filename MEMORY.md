@@ -132,7 +132,7 @@ tempo compram sabão.
 
 ---
 
-## 5. As 25 ferramentas
+## 5. As 29 ferramentas
 
 | Ferramenta | O que faz |
 |---|---|
@@ -161,6 +161,14 @@ tempo compram sabão.
 | `conta_desativar(nome)` | Aposenta conta que não se paga mais |
 | `esquecer_fato(assunto)` | Apaga fato vencido |
 | `quanto_sobra()` | Saldo menos as contas fixas ainda não pagas |
+| `compra_parcelada(...)` | "10x de 300" → 10 lançamentos, um por mês |
+| `parcelas_cancelar(descricao)` | Mata as parcelas que ainda não venceram |
+| `gastos_periodo(desde, ate?)` | Gasto entre duas datas, atravessando meses |
+| `historico_ver(dias?)` | O que a Lauren registrou — auditoria de dentro do grupo |
+
+`lista_add` aceita `onde` (mercado/casa) e `valor`, os dois **opcionais** — item
+sem eles entra igual e fica de fora da soma. O total sempre diz quantos itens
+entraram nele.
 
 `tarefa_add` aceita `repete` (diaria/semanal/mensal): ao marcar feita, a
 próxima nasce sozinha e a antiga fica como histórico. `resumo` aceita
@@ -230,7 +238,7 @@ Documentação: https://ialauren.com/docs/api
 
 ### Custo observado
 
-~4.600 tokens de entrada na primeira mensagem (eram ~1.800 com 8 ferramentas),
+~5.250 tokens de entrada na primeira mensagem (eram ~1.800 com 8 ferramentas),
 subindo conforme o histórico cresce. Quase tudo é instrução + os 8 esquemas de ferramenta, que vão
 em toda chamada. Saída fica em 30–70 tokens. O histórico é aparado em 20 turnos
 **porque a memória é o banco** — contexto longo aqui não compra nada.
@@ -378,6 +386,12 @@ E no banco: `comprado = 1`, com carimbo de hora, e a linha continuando lá.
       da casa que a ferramenta não devolveu
 
 ---
+
+### O saldo só conta o que já aconteceu (09/09/2026)
+
+`_saldo()` filtra `quando <= hoje`. Sem isso, as 10 parcelas de uma compra
+derrubariam o saldo hoje — e não é isso que acontece na vida. Também consertou
+um bug latente: gasto lançado com data futura tirava dinheiro na hora.
 
 ### Rede de segurança (07/09/2026)
 
