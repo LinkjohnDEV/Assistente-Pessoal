@@ -297,8 +297,19 @@ def lista_ver(onde=None, incluir_comprados=False):
     if not incluir_comprados:
         onde_sql.append("comprado = 0")
     if onde:
+        # busca frouxa: "supermercado", "compras" e "mercado" acham o mesmo
+        # contexto. Exigir a palavra exata faria a lista sumir por um sinônimo.
+        pedido = _norm(onde)
+        with _conn() as c:
+            existentes = [l[0] for l in c.execute(
+                "SELECT DISTINCT onde FROM lista_compras WHERE onde IS NOT NULL")]
+        # contextos são poucos e controlados, então aqui vale substring solta:
+        # "supermercado" acha "mercado". O risco do "pá"/"papelão" não existe
+        # num conjunto de 2 ou 3 palavras.
+        alvo = next((x for x in existentes
+                     if pedido == x or pedido in x or x in pedido), pedido)
         onde_sql.append("onde = ?")
-        args.append(_norm(onde))
+        args.append(alvo)
     if onde_sql:
         sql += " WHERE " + " AND ".join(onde_sql)
     sql += " ORDER BY onde IS NULL, onde, id"
@@ -313,8 +324,30 @@ def lista_ver(onde=None, incluir_comprados=False):
         r["itens_sem_preco"] = len(linhas) - len(com_preco)
     if onde:
         r["onde"] = _norm(onde)
+        if not linhas:
+            # "não falta nada pra casa" é enganoso quando existem itens que
+            # simplesmente nunca receberam contexto — melhor dizer isso
+            with _conn() as c:
+                soltos = c.execute(
+                    "SELECT COUNT(*) FROM lista_compras"
+                    " WHERE comprado = 0 AND onde IS NULL").fetchone()[0]
+            with _conn() as c:
+                existentes = sorted(l[0] for l in c.execute(
+                    "SELECT DISTINCT onde FROM lista_compras"
+                    " WHERE onde IS NOT NULL AND comprado = 0"))
+            if existentes:
+                r["contextos_existentes"] = existentes
+                r["aviso"] = (f"não existe contexto '{r['onde']}'. Os que existem são: "
+                              + ", ".join(existentes))
+            if soltos:
+                r["sem_contexto"] = soltos
+                r["aviso"] = (r.get("aviso", "") + f" Há {soltos} item(ns) sem "
+                              f"contexto nenhum.").strip()
     else:
         r["contextos"] = sorted({l["onde"] for l in linhas if l["onde"]})
+        soltos = [l for l in linhas if not l["onde"]]
+        if soltos and r.get("contextos"):
+            r["sem_contexto"] = len(soltos)
     return r
 
 
