@@ -1029,8 +1029,16 @@ FERRAMENTAS["quanto_sobra"] = quanto_sobra
 
 
 def compra_parcelada(descricao, parcelas, valor_parcela=None, valor_total=None,
-                     banco=None, categoria=None, quando=None, quem=None):
+                     entrada=None, banco=None, categoria=None, quando=None, quem=None):
     """"Geladeira em 10x de 300" — 10 lançamentos, um por mês.
+
+    `entrada` é o que foi pago à vista na hora ("dei 1000 de entrada e 5x de
+    500"). Vira um lançamento separado, hoje, e sai do saldo agora. Sem isso
+    o modelo espremia a entrada dentro das parcelas e o total saía errado.
+
+    Se vier `valor_total` COM `entrada`, o total é o preço cheio e as parcelas
+    saem de (total − entrada). Com `valor_parcela`, as parcelas são o que foi
+    dito e a entrada é somada por fora.
 
     As parcelas futuras já ficam gravadas, mas só entram no saldo quando o mês
     chega. Assim o extrato de dezembro já sabe da parcela de dezembro, e o
@@ -1043,6 +1051,12 @@ def compra_parcelada(descricao, parcelas, valor_parcela=None, valor_total=None,
     if not 2 <= n <= 60:
         return {"ok": False, "erro": "parcelas tem que ser entre 2 e 60"}
 
+    if entrada is not None:
+        try:
+            entrada = abs(float(entrada)) or None
+        except (TypeError, ValueError):
+            return {"ok": False, "erro": f"entrada inválida: {entrada!r}"}
+
     if valor_parcela is not None:
         try:
             cada = abs(float(valor_parcela))
@@ -1054,6 +1068,10 @@ def compra_parcelada(descricao, parcelas, valor_parcela=None, valor_total=None,
             total = abs(float(valor_total))
         except (TypeError, ValueError):
             return {"ok": False, "erro": f"valor inválido: {valor_total!r}"}
+        if entrada:
+            total = round(total - entrada, 2)   # o total dito é o preço cheio
+            if total <= 0:
+                return {"ok": False, "erro": "a entrada é maior que o total"}
         cada = round(total / n, 2)
     else:
         return {"ok": False, "erro": "diga o valor da parcela ou o valor total"}
@@ -1079,6 +1097,20 @@ def compra_parcelada(descricao, parcelas, valor_parcela=None, valor_total=None,
         grupo = uuid.uuid4().hex[:12]
         agora = _agora(c)
         ids = []
+
+        # A entrada é lançamento SEPARADO, hoje, fora da contagem de parcelas
+        # (parcela = 0). Sem ela o modelo espremia os 1000 dentro das parcelas
+        # e o total da compra saía errado.
+        id_entrada = None
+        if entrada:
+            hoje = _hoje(c)
+            id_entrada = c.execute(
+                "INSERT INTO movimentos (banco_id, valor, descricao, categoria, quando,"
+                " competencia, registrado_em, registrado_por, parcela, parcelas, grupo)"
+                " VALUES (?,?,?,?,?,?,?,?,0,?,?)",
+                (b["id"], -entrada, f"{descricao} (entrada)", cat, hoje, hoje[:7],
+                 agora, quem, n, grupo)).lastrowid
+
         for i in range(n):
             venc = c.execute("SELECT date(?, ?)", (dia, f"+{i} months")).fetchone()[0]
             # a última parcela absorve a sobra do arredondamento
@@ -1091,10 +1123,17 @@ def compra_parcelada(descricao, parcelas, valor_parcela=None, valor_total=None,
                  agora, quem, i + 1, n, grupo)).lastrowid)
         saldo = _saldo(c, b["id"])
 
-    return {"ok": True, "acao": "parcelado", "grupo": grupo, "ids": ids,
-            "descricao": descricao, "banco": b["nome"], "categoria": cat,
-            "parcelas": n, "valor_parcela": cada, "valor_total": round(total, 2),
-            "primeira": dia, "saldo": round(saldo, 2)}
+    r = {"ok": True, "acao": "parcelado", "grupo": grupo, "ids": ids,
+         "descricao": descricao, "banco": b["nome"], "categoria": cat,
+         "parcelas": n, "valor_parcela": cada, "total_parcelado": round(total, 2),
+         "primeira_parcela": dia, "saldo": round(saldo, 2)}
+    if entrada:
+        r["entrada"] = entrada
+        r["id_entrada"] = id_entrada
+        r["valor_total"] = round(entrada + total, 2)
+    else:
+        r["valor_total"] = round(total, 2)
+    return r
 
 
 

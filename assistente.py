@@ -179,6 +179,12 @@ def girar_fila(app):
                 try:
                     r = app.cerebro.responder(f["mensagem"], quem=f["quem"])
                 except cerebro.ErroLauren as e:
+                    if getattr(e, "status", None) == 401:
+                        with sqlite3.connect(ferramentas.BANCO) as c:
+                            c.execute("DELETE FROM fila WHERE id = ?", (f["id"],))
+                        log.error("fila: descartei %r — erro de conta (%s), não é "
+                                  "transitório", f["mensagem"][:60], e.status)
+                        continue
                     tent = f["tentativas"] + 1
                     with sqlite3.connect(ferramentas.BANCO) as c:
                         if tent >= MAX_TENTATIVAS:
@@ -268,14 +274,28 @@ class Assistente:
             r = self.cerebro.responder(m["texto"], quem=quem, historico=historico)
         except cerebro.ErroLauren as e:
             log.error("cérebro: %s", e)
+            if getattr(e, "status", None) == 401:
+                # Chave inválida ou revogada: isso nunca se resolve sozinho.
+                # (403 NÃO entra aqui: em 10/09/2026 a Lauren devolveu 403 "plano
+                # gratuito" durante uma instabilidade e voltou 15 min depois sem
+                # ninguém mexer na conta. Tratar 403 como permanente perderia
+                # mensagem que a fila teria salvado.)
+                enviar_whatsapp(self.cfg, self.grupo,
+                                f"⚠️ A chave da IA foi recusada: {e}\n"
+                                f"Sua mensagem NÃO foi registrada e tentar de novo não "
+                                f"resolve — precisa de uma chave nova.")
+                return
             if getattr(e, "ferramentas_ja_rodadas", None):
                 # já gravou alguma coisa: repetir gravaria de novo
                 enviar_whatsapp(self.cfg, self.grupo,
                                 f"⚠️ {e}\nParte já foi gravada — confira antes de repetir.")
             else:
                 enfileirar(quem, m["texto"], e)
+                # "guardei sua mensagem" soava como se já estivesse registrada.
+                # Não está: está numa fila esperando a IA voltar.
                 enviar_whatsapp(self.cfg, self.grupo,
-                                f"⚠️ {e}\nGuardei sua mensagem e tento de novo em alguns minutos.")
+                                f"⚠️ {e}\nAinda NÃO registrei. Vou tentar de novo sozinha "
+                                f"nos próximos minutos e te aviso quando conseguir.")
             return
 
         with self.trava:

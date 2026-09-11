@@ -396,7 +396,12 @@ um bug latente: gasto lançado com data futura tirava dinheiro na hora.
 ### Rede de segurança (07/09/2026)
 
 - **Fila de reprocessamento** (`fila`): se a API da Lauren cair, a mensagem é
-  guardada e uma thread tenta de novo a cada 5 min, 12 vezes. **Só entra na
+  guardada e uma thread tenta de novo a cada 5 min, 12 vezes. **Só 401 (chave
+  inválida) fica fora da fila.** Em 10/09/2026 a Lauren devolveu **403 "plano
+  gratuito"** às 23:48 durante uma instabilidade e voltou a funcionar às 00:03
+  sem ninguém mexer na conta — logo depois deu 502 "fora do ar". Um 403 dela
+  NÃO prova que o plano mudou; conferir de novo em alguns minutos antes de
+  mandar alguém mexer em cobrança. **Só entra na
   fila o que falhou ANTES de gravar qualquer coisa** — `ErroLauren` carrega
   `ferramentas_ja_rodadas`, e se alguma rodou, reprocessar gravaria em dobro.
 - **Alerta de queda**: `OnFailure=lauren-alerta.service` + `StartLimitBurst=5`
@@ -409,6 +414,10 @@ um bug latente: gasto lançado com data futura tirava dinheiro na hora.
   nenhum cron, timer, share ou cópia. O dono disse que já fez; se for snapshot
   de VM, vale lembrar que ele copia o arquivo com escrita em andamento. O jeito
   seguro pra SQLite é `.backup`. **Confirmar isso antes de confiar.**
+
+- **A máquina reinicia sozinha às vezes** (hospedagem). Em 10/09/2026 às 11:12
+  ela reiniciou e o serviço voltou sozinho pelo `systemctl enable`, sem perder
+  nada. O cron também sobreviveu.
 
 ### Decidido em 07/09/2026 — não mexer sem falar com o dono
 

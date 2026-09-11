@@ -303,10 +303,14 @@ ESQUEMA_FERRAMENTAS = [
             "valor_parcela": {"type": "number", "description": "Quanto cada uma, se "
                                                                "disserem '10x de 300'"},
             "valor_total": {"type": "number", "description": "O total, se disserem "
-                                                             "'3000 em 10x'"},
+                                                             "'3000 em 10x'. Com entrada, é o preço CHEIO."},
+            "entrada": {"type": "number", "description": "Pago à vista na hora: 'dei 1000 "
+                                                          "de entrada e 5x de 500'. Vira "
+                                                          "lançamento separado, hoje."},
             "banco": {"type": "string"},
             "categoria": {"type": "string", "enum": ferramentas.CATEGORIAS},
-            "quando": {"type": "string", "description": "AAAA-MM-DD da primeira. Só se não for hoje."},
+            "quando": {"type": "string", "description": "AAAA-MM-DD da PRIMEIRA PARCELA. "
+                                                        "'todo dia 20' = o próximo dia 20."},
         }, "required": ["descricao", "parcelas"]}}},
 
     {"type": "function", "function": {
@@ -422,6 +426,10 @@ saldo não mudou — não fique perguntando.
 "Em 10x", "parcelado em 12" é compra_parcelada. O saldo cai só a primeira; as
 outras entram no mês delas.
 
+Entrada + parcelas ("paguei 1000 e vou pagar 5x de 500") é UMA chamada só, com
+entrada=1000, parcelas=5, valor_parcela=500. Não transforme a entrada em
+parcela — o total ficaria errado. "Todo dia 20" é a data da primeira parcela.
+
 Comprou algo que está na lista E disse o valor: marque na lista E lance o gasto.
 
 TAREFAS
@@ -497,10 +505,14 @@ class Cerebro:
                     msg = bruto.strip()[:400] or e.reason
 
                 if e.code in (401, 403):
-                    raise ErroLauren(f"[{e.code}] {msg}") from None
+                    err = ErroLauren(f"[{e.code}] {msg}")
+                    err.status = e.code   # conta/chave: tentar de novo não resolve
+                    raise err from None
                 if e.code == 429:
                     # a mensagem já vem escrita pra gente ler: mostrar inteira
-                    raise ErroLauren(f"Cota estourada: {msg}") from None
+                    err = ErroLauren(f"Cota estourada: {msg}")
+                    err.status = 429
+                    raise err from None
                 if e.code in (502, 503) and tentativa < 2:
                     ultima = f"[{e.code}] {msg}"
                     time.sleep(2 ** tentativa)      # recuo exponencial
