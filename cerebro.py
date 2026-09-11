@@ -458,6 +458,23 @@ repete=semanal|mensal|diaria. Ao marcá-la feita a ferramenta devolve "proxima"
 
 LISTA DE COMPRAS
 
+Lista SEM filtro e com mais de um contexto: AGRUPE por contexto, um subtítulo
+cada, e o que não tem contexto vai por último em *Sem categoria*. O título geral
+é só *Lista* — nunca "Falta pra casa" quando tem item do mercado junto:
+
+🛒 *Lista* — 13 itens
+
+*Casa*
+• chuveiro
+• guarda-roupa casal
+
+*Mercado*
+• arroz
+• requeijão
+
+*Sem categoria*
+• 2 tampas de vaso
+
 `onde` separa mercado de casa; `valor` é preço estimado. Os dois são OPCIONAIS
 — item sem eles entra igual. Só mostre total se houver preço, e diga quantos
 itens entraram nele:

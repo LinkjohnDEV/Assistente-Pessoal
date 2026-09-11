@@ -27,6 +27,11 @@ def _conn():
 
 
 def _norm(texto):
+    # None vira vazio, não a palavra "none": str(None) é "None", e isso gravou
+    # onde='none' num item sem contexto — que a ferramenta passou a mostrar
+    # como se fosse um contexto de verdade chamado "none".
+    if texto is None:
+        return ""
     return " ".join(str(texto).strip().split()).lower()
 
 

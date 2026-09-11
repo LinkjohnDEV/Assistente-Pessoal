@@ -25,6 +25,15 @@ checa("diz quantos entraram na soma", r["itens_com_preco"]==2 and r["itens_sem_p
 checa("lista toda sem preço não inventa total",
       "total_estimado" not in f.lista_ver(onde="mercado"))
 
+print("\nsem contexto é vazio, não a palavra 'none' (bug de 11/09/2026)")
+x = f.lista_add("parafuso")
+checa("item sem onde grava NULL", x["onde"] is None, repr(x["onde"]))
+with sqlite3.connect(tmp) as _c:
+    checa("nada no banco com onde='none'",
+          _c.execute("select count(*) from lista_compras where lower(onde)='none'").fetchone()[0] == 0)
+checa("'none' não aparece como contexto", "none" not in (f.lista_ver().get("contextos") or []))
+f.lista_marcar_comprado("parafuso")
+
 print("\ncontexto separa mercado de casa")
 checa("mercado traz 2", f.lista_ver(onde="mercado")["quantidade"]==2)
 checa("casa traz 3", f.lista_ver(onde="casa")["quantidade"]==3)
