@@ -90,9 +90,13 @@ def marcar_pago(nome, competencia=None, valor_pago=None, banco=None, quem=None):
 
         comp = competencia or competencia_atual(c)
         ja = c.execute(
-            "SELECT pago_em FROM pagamentos WHERE conta_id = ? AND competencia = ?",
+            "SELECT id, pago_em, situacao FROM pagamentos WHERE conta_id = ? AND competencia = ?",
             (conta["id"], comp),
         ).fetchone()
+        if ja and ja["situacao"] == "pulado":
+            # tinham dito que não ia ter conta este mês, e pagaram: vale o pagamento
+            c.execute("DELETE FROM pagamentos WHERE id = ?", (ja["id"],))
+            ja = None
         if ja:
             return {"ok": True, "acao": "ja_estava_pago", "nome": conta["nome"],
                     "competencia": comp, "pago_em": ja["pago_em"]}
@@ -131,7 +135,7 @@ def consultar_contas(nome=None):
         hoje = int(c.execute("SELECT strftime('%d','now','localtime')").fetchone()[0])
         sql = (
             "SELECT c.id, c.nome, c.dia_vencimento, c.valor,"
-            "       p.pago_em, p.valor_pago"
+            "       p.pago_em, p.valor_pago, p.situacao"
             "  FROM contas c"
             "  LEFT JOIN pagamentos p ON p.conta_id = c.id AND p.competencia = ?"
             " WHERE c.ativo = 1"
@@ -152,7 +156,8 @@ def consultar_contas(nome=None):
             "dia_vencimento": dia,
             "valor": l["valor"],
             "competencia": comp,
-            "pago": l["pago_em"] is not None,
+            "pago": l["situacao"] == "pago" and l["pago_em"] is not None,
+            "pulado": l["situacao"] == "pulado",
             "pago_em": l["pago_em"],
             "valor_pago": l["valor_pago"],
             # negativo = já passou do dia neste mês
@@ -936,6 +941,9 @@ def desmarcar_pago(nome, competencia=None, quem=None):
             return {"ok": False, "erro": f"'{conta['nome']}' não estava marcada como paga "
                                          f"em {comp}"}
         c.execute("DELETE FROM pagamentos WHERE id = ?", (pag["id"],))
+    if pag["situacao"] == "pulado":
+        return {"ok": True, "acao": "pulo_desfeito", "nome": conta["nome"],
+                "competencia": comp}
     return {"ok": True, "acao": "desmarcado", "nome": conta["nome"], "competencia": comp,
             "valor_que_estava": pag["valor_pago"],
             "aviso": "o gasto no banco, se houver, precisa ser estornado à parte"}
@@ -1226,3 +1234,37 @@ def gastos_periodo(desde, ate=None, categoria=None, banco=None):
 
 
 FERRAMENTAS["gastos_periodo"] = gastos_periodo
+
+
+def conta_pular(nome, competencia=None, quem=None):
+    """Este mês não tem essa conta: "a luz de setembro não vai vir, pago só em
+    outubro".
+
+    Grava o mês como 'pulado' — não é pagamento, então não mexe em saldo e não
+    tem valor. Some do aviso das 6h e do quanto_sobra daquele mês. Se pagarem
+    mesmo assim, marcar_pago vale por cima; desmarcar_pago desfaz o pulo.
+    """
+    nome = _norm(nome)
+    with _conn() as c:
+        conta = c.execute("SELECT id, nome FROM contas WHERE nome = ? AND ativo = 1",
+                          (nome,)).fetchone()
+        if not conta:
+            linhas = c.execute("SELECT id, nome FROM contas WHERE ativo = 1").fetchall()
+            achado = _casar(nome, [(l["id"], l["nome"]) for l in linhas])
+            if not achado:
+                return {"ok": False, "erro": f"conta '{nome}' não existe",
+                        "contas": [l["nome"] for l in linhas]}
+            conta = next(l for l in linhas if l["id"] == achado[0])
+        comp = competencia or competencia_atual(c)
+        ja = c.execute("SELECT situacao FROM pagamentos WHERE conta_id = ? AND competencia = ?",
+                       (conta["id"], comp)).fetchone()
+        if ja:
+            return {"ok": False, "acao": f"ja_estava_{ja['situacao']}", "nome": conta["nome"],
+                    "competencia": comp,
+                    "erro": f"{conta['nome']} de {comp} já está marcada como {ja['situacao']}"}
+        c.execute("INSERT INTO pagamentos (conta_id, competencia, registrado_por, situacao)"
+                  " VALUES (?,?,?,'pulado')", (conta["id"], comp, quem))
+    return {"ok": True, "acao": "pulado", "nome": conta["nome"], "competencia": comp}
+
+
+FERRAMENTAS["conta_pular"] = conta_pular

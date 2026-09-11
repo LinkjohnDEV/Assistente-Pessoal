@@ -281,6 +281,16 @@ ESQUEMA_FERRAMENTAS = [
         }, "required": ["nome"]}}},
 
     {"type": "function", "function": {
+        "name": "conta_pular",
+        "description": "Este MÊS não tem essa conta: 'a luz de setembro não vai vir', "
+                       "'só pago em outubro, anula a desse mês'. Não é pagamento: não "
+                       "mexe em saldo. Tira do aviso e do quanto sobra daquele mês.",
+        "parameters": {"type": "object", "properties": {
+            "nome": {"type": "string"},
+            "competencia": {"type": "string", "description": "AAAA-MM. Omita para o mês atual."},
+        }, "required": ["nome"]}}},
+
+    {"type": "function", "function": {
         "name": "conta_desativar",
         "description": "Aposenta conta que não se paga mais. O histórico fica.",
         "parameters": {"type": "object", "properties": {
@@ -459,6 +469,11 @@ itens entraram nele:
 • chuveiro
 
 DESFAZER
+
+"Luz e água" são DUAS contas: uma chamada pra cada.
+
+conta_pular = este mês não tem a conta ("anula a de setembro, pago em outubro").
+desmarcar_pago = pagaram mas não era pra ter marcado. Não confunda os dois.
 
 desmarcar_pago desfaz pagamento · estornar desfaz lançamento ·
 parcelas_cancelar mata as parcelas futuras · tarefa_corrigir e lista_corrigir

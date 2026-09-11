@@ -161,12 +161,12 @@ As outras: `lista_compras`, `tarefas`, `fatos`, `bancos`, `movimentos`,
 
 ---
 
-## As 29 ferramentas
+## As 30 ferramentas
 
 <details>
 <summary><b>Contas a pagar</b></summary>
 
-`salvar_conta` · `marcar_pago` · `desmarcar_pago` · `consultar_contas` · `conta_desativar`
+`salvar_conta` · `marcar_pago` · `desmarcar_pago` · `conta_pular` · `consultar_contas` · `conta_desativar`
 </details>
 
 <details>
@@ -225,11 +225,12 @@ $ python3 teste_tarefas.py         30/30    prazo, recorrência, aviso
 $ python3 teste_desfazer.py        45/45    desfazer, aposentar, arquivar
 $ python3 teste_parcelas.py        26/26    parcelamento e histórico
 $ python3 teste_lista_dinheiro.py  24/24    contexto e preço na lista, período livre
+$ python3 teste_pular.py           18/18    mês sem conta ("só pago em outubro")
 $ python3 teste_webhook.py         57/57    assinatura, replay, roteamento HTTP
 $ python3 teste_roteamento.py      18/18    frase → ferramenta certa (usa a API)
 ```
 
-**278 verificações.** Todas leem o banco por SQL — nenhuma confia no que a
+**296 verificações.** Todas leem o banco por SQL — nenhuma confia no que a
 função devolveu. Rodam em banco descartável: `casa.db` nunca é tocada.
 
 O teste que mais importa continua sendo o mais simples:

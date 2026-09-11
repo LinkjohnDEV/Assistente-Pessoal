@@ -34,7 +34,7 @@ def a_vencer(hoje=None, antecedencia=ANTECEDENCIA):
     r = ferramentas.consultar_contas()
     pendentes = []
     for c in r["contas"]:
-        if c["pago"] or c["dia_vencimento"] is None:
+        if c["pago"] or c.get("pulado") or c["dia_vencimento"] is None:
             continue
         vence = vencimento_no_mes(c["dia_vencimento"], hoje.year, hoje.month)
         faltam = (vence - hoje).days

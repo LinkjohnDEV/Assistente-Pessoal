@@ -132,7 +132,7 @@ tempo compram sabão.
 
 ---
 
-## 5. As 29 ferramentas
+## 5. As 30 ferramentas
 
 | Ferramenta | O que faz |
 |---|---|
@@ -159,6 +159,7 @@ tempo compram sabão.
 | `tarefa_corrigir(tarefa, novo_texto?, novo_quando?)` | Muda texto e/ou data |
 | `desmarcar_pago(nome, competencia?)` | Desfaz pagamento de conta |
 | `conta_desativar(nome)` | Aposenta conta que não se paga mais |
+| `conta_pular(nome, competencia?)` | Este mês não tem a conta — `pagamentos.situacao = 'pulado'` |
 | `esquecer_fato(assunto)` | Apaga fato vencido |
 | `quanto_sobra()` | Saldo menos as contas fixas ainda não pagas |
 | `compra_parcelada(...)` | "10x de 300" → 10 lançamentos, um por mês |

@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS pagamentos (
     pago_em         TEXT,
     valor_pago      REAL,
     registrado_por  TEXT,
+    -- 'pago' ou 'pulado' (11/09/2026): "a luz de setembro não vai ter, só pago
+    -- em outubro". Sem isso o mês ficava eternamente como vencido e não pago.
+    situacao        TEXT DEFAULT 'pago',
     UNIQUE(conta_id, competencia)         -- impede pagar 2x o mesmo mês
 );
 
