@@ -461,6 +461,14 @@ WhatsApp é estreita e texto longo quebra sozinho — item em duas linhas
 (título numa, data noutra) vira um bloco ilegível. Data igual pra todos vai
 uma vez no título. Linha em branco entre título e lista.
 
+**Modelo fixo em `lauren-4`. NÃO trocar** (decidido em 12/09/2026). Naquele dia
+`lauren-4`, `nebula-3` e `velix-5` oscilaram com 502 "A Lauren está fora do ar"
+enquanto a `lauren-6` respondia sempre — mesma chave, mesma requisição, só o
+campo `model` mudando. A tentação é trocar pra `lauren-6`; o dono decidiu que
+não, porque ela consome bem mais cota e **a fila de reprocessamento dá conta**:
+a mensagem que caiu às 11:25:52 entrou sozinha às 11:30:32, na primeira
+retentativa. Instabilidade intermitente não justifica trocar de modelo.
+
 ### Decidido que NÃO vai ter (07/09/2026)
 
 **Foto e áudio.** O dono decidiu: só texto. Não propor de novo, não construir.
