@@ -579,6 +579,13 @@ class Cerebro:
                 except Exception:
                     msg = bruto.strip()[:400] or e.reason
 
+                if e.code == 400:
+                    # regra da Lauren: 400 é erro do pedido, a mensagem diz o
+                    # que arrumar e repetir igual nunca vai passar. Só 502 é
+                    # do lado deles e merece nova tentativa.
+                    err = ErroLauren(f"[400] {msg}")
+                    err.status = 400
+                    raise err from None
                 if e.code in (401, 403):
                     err = ErroLauren(f"[{e.code}] {msg}")
                     err.status = e.code   # conta/chave: tentar de novo não resolve
@@ -677,12 +684,43 @@ class Cerebro:
                 "modelo": modelo_real, "mensagens": mensagens[1:]}
 
 
+def aparar_historico(mensagens, teto):
+    """Corta o histórico SEM partir um ciclo de ferramenta no meio.
+
+    `mensagens[-teto:]` cru pode começar num role "tool" cujo turno de
+    assistente (o que pediu a ferramenta) ficou para trás — e aí a API recusa
+    com 400: "o histórico de ferramenta está quebrado". Foi o que quebrou a
+    conversa em 12/09/2026.
+
+    Um turno começa no "user", então é ali que se corta.
+    """
+    if not mensagens:
+        return []
+    corte = mensagens[-teto:] if teto and len(mensagens) > teto else list(mensagens)
+    # anda pra frente até o começo de um turno
+    while corte and corte[0].get("role") != "user":
+        corte.pop(0)
+    # e se o último turno ficou sem as respostas das ferramentas, tira ele
+    while corte and corte[-1].get("role") == "assistant" and corte[-1].get("tool_calls"):
+        corte.pop()
+    return corte
+
+
 def _limpar(historico):
-    """Tira turnos de assistente vazios — reenviá-los trava a conversa."""
-    limpo = []
+    """Tira turno de assistente vazio e resposta de ferramenta órfã.
+
+    Órfã = role "tool" cujo tool_call_id não foi pedido por nenhum turno de
+    assistente que esteja no histórico. A API recusa o pedido inteiro com 400
+    quando isso acontece, então é melhor descartar a linha solta.
+    """
+    limpo, pedidos = [], set()
     for m in historico:
-        if m.get("role") == "assistant" and not m.get("tool_calls") \
-                and not (m.get("content") or "").strip():
+        if m.get("role") == "assistant":
+            if not m.get("tool_calls") and not (m.get("content") or "").strip():
+                continue
+            for tc in m.get("tool_calls") or []:
+                pedidos.add(tc.get("id"))
+        if m.get("role") == "tool" and m.get("tool_call_id") not in pedidos:
             continue
         limpo.append(m)
     return limpo

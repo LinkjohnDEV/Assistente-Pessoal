@@ -421,6 +421,30 @@ criadas (IPVA, Viagem, Emergência, Casa). **Vai ser sempre uma conta só.**
 derrubariam o saldo hoje — e não é isso que acontece na vida. Também consertou
 um bug latente: gasto lançado com data futura tirava dinheiro na hora.
 
+### Aparar histórico sem partir ciclo de ferramenta (12/09/2026)
+
+**`mensagens[-20:]` cru é bug.** O corte podia começar num `role: "tool"` cujo
+turno de assistente (o que pediu a ferramenta) ficou pra trás, e a Lauren
+recusa o pedido inteiro com 400 "o histórico de ferramenta está quebrado".
+Em 200 conversas aleatórias com ferramenta, **31% quebravam.**
+
+Use `cerebro.aparar_historico()`: corta e depois anda pra frente até achar um
+`user`, porque é ali que um turno começa. `_limpar()` joga fora `tool` órfão
+como segunda camada.
+
+Por que demorou a aparecer: a fila de reprocessamento chama
+`responder(mensagem, quem)` **sem histórico**, então a retentativa funcionava
+sempre. A mensagem falhava, entrava na fila, e 5 minutos depois passava — o que
+parecia "a Lauren está instável" era o meu corte quebrando e a fila salvando.
+
+**Regra da Lauren, que vale separar:** `400` é erro do pedido — a mensagem diz
+o que arrumar e repetir igual nunca passa, então NÃO vai pra fila. `502` é do
+lado deles e merece nova tentativa. Antes eu tratava tudo igual.
+
+Nunca use `n` como variável em teste: é o contador de verificações dos arquivos
+`teste_*.py`. Sobrescrevi e o `teste_webhook` passou de 57 pra 33 "verificações"
+sem nenhuma falha aparente.
+
 ### Rede de segurança (07/09/2026)
 
 - **Fila de reprocessamento** (`fila`): se a API da Lauren cair, a mensagem é

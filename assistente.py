@@ -179,7 +179,7 @@ def girar_fila(app):
                 try:
                     r = app.cerebro.responder(f["mensagem"], quem=f["quem"])
                 except cerebro.ErroLauren as e:
-                    if getattr(e, "status", None) == 401:
+                    if getattr(e, "status", None) in (400, 401):
                         with sqlite3.connect(ferramentas.BANCO) as c:
                             c.execute("DELETE FROM fila WHERE id = ?", (f["id"],))
                         log.error("fila: descartei %r — erro de conta (%s), não é "
@@ -274,16 +274,18 @@ class Assistente:
             r = self.cerebro.responder(m["texto"], quem=quem, historico=historico)
         except cerebro.ErroLauren as e:
             log.error("cérebro: %s", e)
-            if getattr(e, "status", None) == 401:
-                # Chave inválida ou revogada: isso nunca se resolve sozinho.
+            if getattr(e, "status", None) in (400, 401):
+                # 400 é erro do PEDIDO (o meu), 401 é chave recusada. Nos dois
+                # casos repetir igual nunca passa — a regra é da própria Lauren:
+                # 400 é do lado de quem chama, 502 é do lado dela.
                 # (403 NÃO entra aqui: em 10/09/2026 a Lauren devolveu 403 "plano
                 # gratuito" durante uma instabilidade e voltou 15 min depois sem
                 # ninguém mexer na conta. Tratar 403 como permanente perderia
                 # mensagem que a fila teria salvado.)
                 enviar_whatsapp(self.cfg, self.grupo,
-                                f"⚠️ A chave da IA foi recusada: {e}\n"
-                                f"Sua mensagem NÃO foi registrada e tentar de novo não "
-                                f"resolve — precisa de uma chave nova.")
+                                f"⚠️ Não consegui processar: {e}\n"
+                                f"Sua mensagem NÃO foi registrada, e repetir igual não "
+                                f"resolve — o problema é do meu lado.")
                 return
             if getattr(e, "ferramentas_ja_rodadas", None):
                 # já gravou alguma coisa: repetir gravaria de novo
@@ -299,7 +301,7 @@ class Assistente:
             return
 
         with self.trava:
-            self.historico = r["mensagens"][-TETO_HISTORICO:]
+            self.historico = cerebro.aparar_historico(r["mensagens"], TETO_HISTORICO)
 
         log.info("→ %s %s", r["resposta"], [f["nome"] for f in r["ferramentas"]])
         registrar_historico(quem, m["texto"], r["resposta"], r["ferramentas"],
@@ -450,7 +452,7 @@ def terminal(quem="Johnata"):
             print("    ↳ (nenhuma ferramenta chamada)")
         print(f"    [modelo: {r['modelo']} | tokens: {r['tokens_in']}+{r['tokens_out']}]")
 
-        historico = r["mensagens"][-TETO_HISTORICO:]
+        historico = cerebro.aparar_historico(r["mensagens"], TETO_HISTORICO)
         registrar_historico(quem, linha, r["resposta"], r["ferramentas"],
                             r["tokens_in"], r["tokens_out"])
 

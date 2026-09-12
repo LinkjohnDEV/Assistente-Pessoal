@@ -109,6 +109,51 @@ alcance = s.connect_ex((alvo.hostname, alvo.port or 80)); s.close()
 checa(f"{alvo.hostname}:{alvo.port} responde", alcance == 0, f"connect_ex={alcance}")
 
 # ------------------------------------------------ dedup e identificação
+print("\naparar histórico sem partir ciclo de ferramenta (bug de 12/09/2026)")
+# mensagens[-20:] cru podia começar num role "tool" cujo turno de assistente
+# ficou pra trás. A Lauren recusa o pedido inteiro com 400. Aconteceu em
+# produção às 11:43 de 12/09.
+import random as _r
+def _orfaos(seq):
+    vistos, fora = set(), []
+    for m in seq:
+        if m["role"] == "assistant":
+            for tc in m.get("tool_calls") or []:
+                vistos.add(tc["id"])
+        if m["role"] == "tool" and m["tool_call_id"] not in vistos:
+            fora.append(m["tool_call_id"])
+    return fora
+
+_r.seed(7)
+quebrava, bons, comecos = 0, 0, set()
+for _ in range(200):
+    msgs = []
+    for _t in range(_r.randint(1, 8)):
+        msgs.append({"role": "user", "content": "x"})
+        quantas = _r.randint(0, 4)   # NÃO usar 'n': é o contador de verificações
+        if quantas:
+            ids = [f"c{len(msgs)}-{i}" for i in range(quantas)]
+            msgs.append({"role": "assistant", "content": None, "tool_calls":
+                         [{"id": i, "type": "function",
+                           "function": {"name": "f", "arguments": "{}"}} for i in ids]})
+            msgs += [{"role": "tool", "tool_call_id": i, "content": "ok"} for i in ids]
+        msgs.append({"role": "assistant", "content": "pronto"})
+    teto = _r.choice([5, 8, 12, 20])
+    if _orfaos(msgs[-teto:]):
+        quebrava += 1
+    ap = cerebro.aparar_historico(msgs, teto)
+    if not _orfaos(ap):
+        bons += 1
+    if ap:
+        comecos.add(ap[0]["role"])
+checa("nenhuma das 200 conversas fica com ferramenta órfã", bons == 200, f"{bons}/200")
+checa("o corte cru quebrava mesmo (prova que o bug era real)", quebrava > 0, f"{quebrava}/200")
+checa("histórico aparado sempre começa no 'user'", comecos <= {"user"}, str(comecos))
+checa("histórico vazio não estoura", cerebro.aparar_historico([], 20) == [])
+orfa = [{"role": "tool", "tool_call_id": "solta", "content": "ok"},
+        {"role": "user", "content": "oi"}]
+checa("_limpar joga fora ferramenta órfã", cerebro._limpar(orfa) == orfa[1:])
+
 print("\ndedup e identificação")
 app = assistente.Assistente(cfg)
 checa("primeira vez não é repetida", not app.ja_vista("msg1"))

@@ -234,7 +234,7 @@ $ python3 teste_webhook.py         57/57    assinatura, replay, roteamento HTTP
 $ python3 teste_roteamento.py      18/18    frase → ferramenta certa (usa a API)
 ```
 
-**326 verificações.** Todas leem o banco por SQL — nenhuma confia no que a
+**350 verificações.** Todas leem o banco por SQL — nenhuma confia no que a
 função devolveu. Rodam em banco descartável: `casa.db` nunca é tocada.
 
 O teste que mais importa continua sendo o mais simples:
@@ -309,6 +309,7 @@ testes.** Alguns:
 | `"x"` casava com `"levar o lixo pra rua"` (por causa do `lixo`) | pedaço tem que ser palavra inteira e ter 4+ letras |
 | Cadastrar banco com saldo zero dava erro **e criava o banco assim mesmo** | validar antes de inserir; mensagem e banco discordando é pior que os dois errados |
 | O aviso das 6h saiu às 3h | `CRON_TZ` explícito, provado com job de teste |
+| `mensagens[-20:]` cortava no meio de um ciclo de ferramenta e a API recusava com 400 — em 31% das conversas | cortar e andar até o próximo `user`; `400` não vai pra fila, `502` vai |
 | Uma requisição válida não deixava rastro no log — sucesso e "nunca chegou" eram indistinguíveis | toda aceitação escreve no log |
 
 O `MEMORY.md` guarda as 15 armadilhas com sintoma, causa e conserto. É o
