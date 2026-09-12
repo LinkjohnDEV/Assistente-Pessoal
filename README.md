@@ -119,7 +119,7 @@ não conseguiu** — foi isso que permitiu consertar todos os erros conversando.
   ┌─────────┐                │   cerebro.py ──── a ÚNICA parte que  │
   │HuberChat├───────────────▶│        │          sabe qual modelo é  │
   └─────────┘                │        ▼                              │
-       ▲                     │  ferramentas.py ─ 29 funções puras    │
+       ▲                     │  ferramentas.py ─ 32 funções puras    │
        │  resposta           │        │                              │
        └─────────────────────┤        ▼                              │
                              │     casa.db  ◀── quem lembra          │
@@ -161,7 +161,7 @@ As outras: `lista_compras`, `tarefas`, `fatos`, `bancos`, `movimentos`,
 
 ---
 
-## As 30 ferramentas
+## As 32 ferramentas
 
 <details>
 <summary><b>Contas a pagar</b></summary>
@@ -188,7 +188,10 @@ Com contexto (*mercado*, *casa*) e preço estimado — os dois opcionais.
 
 `banco_salvar` · `gasto_registrar` · `entrada_registrar` · `compra_parcelada` ·
 `saldo_ver` · `extrato` · `resumo` · `gastos_periodo` · `quanto_sobra` ·
-`estornar` · `parcelas_cancelar` · `limite_definir`
+`transferir` · `estornar` · `parcelas_cancelar` · `limite_definir` · `banco_desativar`
+
+Caixinhas (cofrinhos dentro da conta) são bancos do tipo `caixinha`. Guardar e
+tirar é transferência — **nunca entra no relatório de gastos**.
 </details>
 
 <details>
@@ -226,11 +229,12 @@ $ python3 teste_desfazer.py        45/45    desfazer, aposentar, arquivar
 $ python3 teste_parcelas.py        26/26    parcelamento e histórico
 $ python3 teste_lista_dinheiro.py  24/24    contexto e preço na lista, período livre
 $ python3 teste_pular.py           18/18    mês sem conta ("só pago em outubro")
+$ python3 teste_caixinhas.py       30/30    guardar, tirar, ver — sem virar gasto
 $ python3 teste_webhook.py         57/57    assinatura, replay, roteamento HTTP
 $ python3 teste_roteamento.py      18/18    frase → ferramenta certa (usa a API)
 ```
 
-**296 verificações.** Todas leem o banco por SQL — nenhuma confia no que a
+**326 verificações.** Todas leem o banco por SQL — nenhuma confia no que a
 função devolveu. Rodam em banco descartável: `casa.db` nunca é tocada.
 
 O teste que mais importa continua sendo o mais simples:

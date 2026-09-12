@@ -132,7 +132,7 @@ tempo compram sabão.
 
 ---
 
-## 5. As 30 ferramentas
+## 5. As 32 ferramentas
 
 | Ferramenta | O que faz |
 |---|---|
@@ -160,6 +160,8 @@ tempo compram sabão.
 | `desmarcar_pago(nome, competencia?)` | Desfaz pagamento de conta |
 | `conta_desativar(nome)` | Aposenta conta que não se paga mais |
 | `conta_pular(nome, competencia?)` | Este mês não tem a conta — `pagamentos.situacao = 'pulado'` |
+| `transferir(valor, de?, para?)` | Move entre conta e caixinha — **não é gasto** |
+| `banco_desativar(nome)` | Aposenta banco; o histórico fica |
 | `esquecer_fato(assunto)` | Apaga fato vencido |
 | `quanto_sobra()` | Saldo menos as contas fixas ainda não pagas |
 | `compra_parcelada(...)` | "10x de 300" → 10 lançamentos, um por mês |
@@ -387,6 +389,31 @@ E no banco: `comprado = 1`, com carimbo de hora, e a linha continuando lá.
       da casa que a ferramenta não devolveu
 
 ---
+
+### Caixinhas (12/09/2026)
+
+Caixinha do Nubank é um `banco` com `tipo='caixinha'`. Guardar e tirar é
+`transferir`, que cria dois movimentos com categoria **`Transferência`** —
+excluída do `resumo`, do `gastos_periodo` e do "quanto entrou". **Guardar R$500
+não é gastar R$500**; sem essa exclusão o relatório do mês vira ficção.
+
+Três regras que os testes travam:
+
+- **Caixinha nunca é escolhida sozinha.** `_resolver_banco` sem nome só olha
+  `tipo <> 'caixinha'`, senão um "uber 27" sairia da reserva de emergência.
+- **Os dois lados do `transferir` são opcionais.** "Guardei 500 na viagem" não
+  diz de onde sai; exigir os dois fazia o modelo inventar um banco chamado
+  "conta". O lado omitido vira a conta principal.
+- **`quanto_sobra` usa só o disponível**, e cita o guardado à parte. "Posso
+  gastar quanto?" não conta a reserva.
+
+Banco aposentado (`bancos.ativo = 0`) some das consultas mas mantém histórico.
+Gastar num aposentado devolve erro explicando — antes estourava com
+`UNIQUE constraint failed`, porque não achava (filtro por ativo) e tentava criar.
+
+**Em 12/09/2026 o dono migrou tudo pro Nubank:** Inter e C6 aposentados, Nubank
+começou zerado, as 4 parcelas futuras do iPhone movidas pra ele, e 4 caixinhas
+criadas (IPVA, Viagem, Emergência, Casa). **Vai ser sempre uma conta só.**
 
 ### O saldo só conta o que já aconteceu (09/09/2026)
 

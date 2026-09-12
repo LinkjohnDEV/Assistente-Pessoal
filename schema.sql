@@ -72,7 +72,11 @@ CREATE INDEX IF NOT EXISTS idx_fatos_ass ON fatos(assunto);
 CREATE TABLE IF NOT EXISTS bancos (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     nome        TEXT NOT NULL UNIQUE,
-    tipo        TEXT DEFAULT 'conta',   -- conta | cartao | dinheiro
+    -- 'caixinha' é sub-saldo dentro de uma conta (as caixinhas do Nubank):
+    -- o dinheiro continua sendo seu, só está separado. Nunca é escolhida
+    -- automaticamente — só quando alguém diz o nome dela.
+    tipo        TEXT DEFAULT 'conta',   -- conta | cartao | dinheiro | caixinha
+    ativo       INTEGER DEFAULT 1,
     criado_em   TEXT,
     criado_por  TEXT
 );

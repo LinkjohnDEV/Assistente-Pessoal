@@ -150,7 +150,8 @@ ESQUEMA_FERRAMENTAS = [
         "description": "Cadastra banco/cartão/dinheiro. Use quando disserem quanto têm.",
         "parameters": {"type": "object", "properties": {
             "nome": {"type": "string", "description": "Ex: 'inter', 'nubank'"},
-            "tipo": {"type": "string", "enum": ["conta", "cartao", "dinheiro"]},
+            "tipo": {"type": "string", "enum": ["conta", "cartao", "dinheiro", "caixinha"],
+                     "description": "caixinha = cofrinho dentro da conta (as caixinhas do Nubank)"},
             "saldo_inicial": {"type": "number", "description": "Quanto tem hoje, se disserem"},
         }, "required": ["nome"]}}},
 
@@ -174,6 +175,30 @@ ESQUEMA_FERRAMENTAS = [
             "banco": {"type": "string"},
             "quando": {"type": "string", "description": "AAAA-MM-DD, só se não for hoje"},
         }, "required": ["valor"]}}},
+
+    {"type": "function", "function": {
+        "name": "transferir",
+        "description": "Move dinheiro entre conta e caixinha, nos DOIS sentidos: "
+                       "'guardei 500 na viagem', 'tirei 200 da emergência', 'passei "
+                       "300 do Nubank pro IPVA'. NÃO é gasto nem entrada — o dinheiro "
+                       "só mudou de lugar.",
+        "parameters": {"type": "object", "properties": {
+            "valor": {"type": "number", "description": "Sempre positivo"},
+            "de": {"type": "string", "description": "De onde sai. OMITA quando for "
+                                                     "guardar ('guardei 500 na viagem') — "
+                                                     "aí sai da conta principal sozinho."},
+            "para": {"type": "string", "description": "Para onde vai. OMITA quando for "
+                                                       "tirar ('tirei 200 da viagem')."},
+            "descricao": {"type": "string"},
+        }, "required": ["valor"]}}},
+
+    {"type": "function", "function": {
+        "name": "banco_desativar",
+        "description": "Aposenta um banco que não se usa mais ('fechei a conta do "
+                       "Inter'). Some das consultas; o histórico fica.",
+        "parameters": {"type": "object", "properties": {
+            "nome": {"type": "string"},
+        }, "required": ["nome"]}}},
 
     {"type": "function", "function": {
         "name": "saldo_ver",
@@ -424,6 +449,24 @@ DINHEIRO
 
 "uber 27" é gasto de R$ 27,00. Valor sempre positivo — o sinal é da ferramenta.
 Categoria da lista; na dúvida, Outros. Vários valores = vários lançamentos.
+
+CAIXINHAS
+
+Caixinha é cofrinho dentro da conta. Guardar e tirar é transferir, NUNCA
+gasto_registrar nem entrada_registrar — guardar R$500 não é gastar R$500.
+
+  "guardei 500 na viagem"        → transferir(de=conta, para=viagem, 500)
+  "tirei 200 da emergência"      → transferir(de=emergência, para=conta, 200)
+  "quanto tem no IPVA?"          → saldo_ver("IPVA")
+
+Ao mostrar o saldo geral, separe o que dá pra gastar do que está guardado:
+
+🏦 *Nubank* — R$ 2.580,00 disponível
+
+🐷 Viagem — R$ 300,00
+🐷 IPVA — R$ 0,00
+
+💰 Total: R$ 2.880,00  ·  guardado: R$ 300,00
 
 banco_salvar só CRIA banco novo; nunca mexe em saldo. Saldo muda por
 gasto_registrar e entrada_registrar. Se não der pra saber se o dinheiro ENTROU

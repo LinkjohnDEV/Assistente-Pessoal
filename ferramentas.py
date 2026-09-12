@@ -447,15 +447,23 @@ def _resolver_banco(c, nome, quem=None, criar=True):
     if nome:
         nome = _norm(nome)
         b = c.execute("SELECT * FROM bancos WHERE nome = ?", (nome,)).fetchone()
-        if b:
+        if b and b["ativo"]:
             return b, None
+        if b:
+            # existe mas foi aposentado: dizer isso, não tentar criar de novo
+            # (criar esbarrava no UNIQUE do nome e estourava a ferramenta)
+            return None, (f"o banco '{b['nome']}' foi aposentado. Se voltou a usar, "
+                          f"me diga pra reativar.")
         if not criar:
             return None, f"banco '{nome}' não existe"
         c.execute("INSERT INTO bancos (nome, criado_em, criado_por) VALUES (?,?,?)",
                   (nome, _agora(c), quem))
         return c.execute("SELECT * FROM bancos WHERE nome = ?", (nome,)).fetchone(), None
 
-    todos = c.execute("SELECT * FROM bancos ORDER BY id").fetchall()
+    # sem nome dito, só contas entram na escolha: guardar numa caixinha é
+    # sempre explícito, senão um "uber 27" sairia da reserva de emergência
+    todos = c.execute("SELECT * FROM bancos WHERE ativo = 1 AND tipo <> 'caixinha'"
+                      " ORDER BY id").fetchall()
     if len(todos) == 1:
         return todos[0], None
     if not todos:
@@ -523,7 +531,7 @@ def banco_salvar(nome, tipo=None, saldo_inicial=None, quem=None):
     if not nome:
         return {"ok": False, "erro": "nome vazio"}
     tipo = (tipo or "conta").strip().lower().replace("ã", "a")
-    if tipo not in ("conta", "cartao", "dinheiro"):
+    if tipo not in ("conta", "cartao", "dinheiro", "caixinha"):
         tipo = "conta"
 
     abertura = None
@@ -579,10 +587,10 @@ def saldo_ver(banco=None):
                " COALESCE((SELECT SUM(m.valor) FROM movimentos m"
                "           WHERE m.banco_id = b.id AND m.estornado = 0"
                "             AND m.quando <= date('now','localtime')),0) AS saldo"
-               "  FROM bancos b")
+               "  FROM bancos b WHERE b.ativo = 1")
         args = []
         if banco:
-            sql += " WHERE b.nome = ?"
+            sql += " AND b.nome = ?"
             args.append(_norm(banco))
         linhas = c.execute(sql + " ORDER BY b.nome", args).fetchall()
 
@@ -590,8 +598,16 @@ def saldo_ver(banco=None):
         return {"ok": False, "erro": f"banco '{_norm(banco)}' não existe"}
     bancos = [{"nome": l["nome"], "tipo": l["tipo"], "saldo": round(l["saldo"], 2)}
               for l in linhas]
-    return {"ok": True, "bancos": bancos,
-            "total": round(sum(b["saldo"] for b in bancos), 2)}
+    contas = [b for b in bancos if b["tipo"] != "caixinha"]
+    caixinhas = [b for b in bancos if b["tipo"] == "caixinha"]
+    r = {"ok": True, "bancos": bancos,
+         "total": round(sum(b["saldo"] for b in bancos), 2)}
+    if caixinhas:
+        # o que dá pra gastar hoje é diferente do que está guardado
+        r["disponivel"] = round(sum(b["saldo"] for b in contas), 2)
+        r["guardado"] = round(sum(b["saldo"] for b in caixinhas), 2)
+        r["caixinhas"] = caixinhas
+    return r
 
 
 def extrato(banco=None, competencia=None, categoria=None, limite=15):
@@ -629,13 +645,15 @@ def resumo(competencia=None, comparar_com=None):
             "SELECT m.categoria, SUM(-m.valor) AS gasto, COUNT(*) AS n"
             "  FROM movimentos m"
             " WHERE m.estornado = 0 AND m.competencia = ? AND m.valor < 0"
+            "   AND COALESCE(m.categoria,'') <> 'Transferência'"
             " GROUP BY m.categoria ORDER BY gasto DESC", (comp,)).fetchall()
         # 'Saldo inicial' fica de fora: abertura de conta não é dinheiro que
         # entrou no mês — misturar os dois faz o resumo mentir no primeiro mês
         entrou = c.execute(
             "SELECT COALESCE(SUM(valor),0) FROM movimentos"
             " WHERE estornado = 0 AND competencia = ? AND valor > 0"
-            "   AND COALESCE(categoria,'') <> 'Saldo inicial'", (comp,)).fetchone()[0]
+            "   AND COALESCE(categoria,'') NOT IN ('Saldo inicial','Transferência')",
+            (comp,)).fetchone()[0]
         tetos = {l["categoria"]: l["valor_mes"]
                  for l in c.execute("SELECT categoria, valor_mes FROM limites")}
 
@@ -1000,9 +1018,17 @@ def quanto_sobra(competencia=None):
     """
     with _conn() as c:
         comp = competencia or competencia_atual(c)
+        # só o que dá pra gastar: caixinha é dinheiro guardado de propósito
         saldo = c.execute(
-            "SELECT COALESCE(SUM(valor),0) FROM movimentos WHERE estornado = 0"
-        ).fetchone()[0]
+            "SELECT COALESCE(SUM(m.valor),0) FROM movimentos m"
+            "  JOIN bancos b ON b.id = m.banco_id"
+            " WHERE m.estornado = 0 AND b.ativo = 1 AND b.tipo <> 'caixinha'"
+            "   AND m.quando <= date('now','localtime')").fetchone()[0]
+        guardado = c.execute(
+            "SELECT COALESCE(SUM(m.valor),0) FROM movimentos m"
+            "  JOIN bancos b ON b.id = m.banco_id"
+            " WHERE m.estornado = 0 AND b.ativo = 1 AND b.tipo = 'caixinha'"
+            "   AND m.quando <= date('now','localtime')").fetchone()[0]
         # Água e luz mudam de valor todo mês, então a regra costuma ficar sem
         # valor. Nesse caso o último pagamento é a melhor estimativa — contar
         # como zero faria o "quanto sobra" mentir pra mais.
@@ -1031,6 +1057,9 @@ def quanto_sobra(competencia=None):
     r = {"ok": True, "competencia": comp, "saldo": round(saldo, 2),
          "contas_a_pagar": a_pagar, "total_a_pagar": round(total, 2),
          "sobra": round(saldo - total, 2)}
+    if guardado:
+        r["guardado_em_caixinhas"] = round(guardado, 2)
+        r["nota"] = "o guardado nas caixinhas NÃO entra no que sobra"
     if sem_ideia:
         r["sem_valor_conhecido"] = sem_ideia
         r["aviso"] = ("estas contas não têm valor conhecido e ficaram FORA da conta: "
@@ -1219,7 +1248,8 @@ def gastos_periodo(desde, ate=None, categoria=None, banco=None):
 
         sql = ("SELECT m.categoria, SUM(-m.valor) AS gasto, COUNT(*) AS n"
                "  FROM movimentos m JOIN bancos b ON b.id = m.banco_id"
-               " WHERE m.estornado = 0 AND m.valor < 0 AND m.quando BETWEEN ? AND ?")
+               " WHERE m.estornado = 0 AND m.valor < 0 AND m.quando BETWEEN ? AND ?"
+               "   AND COALESCE(m.categoria,'') <> 'Transferência'")
         args = [d, a]
         if categoria:
             sql += " AND m.categoria = ?"; args.append(_categoria(categoria))
@@ -1273,3 +1303,88 @@ def conta_pular(nome, competencia=None, quem=None):
 
 
 FERRAMENTAS["conta_pular"] = conta_pular
+
+
+def transferir(valor, de=None, para=None, descricao=None, quem=None):
+    """Move dinheiro entre bancos e caixinhas. NÃO é gasto nem entrada.
+
+    O lado que não for dito vira a conta principal: "guardei 500 na viagem"
+    não diz de onde saiu, e "tirei 200 da viagem" não diz pra onde foi. Exigir
+    os dois fazia o modelo inventar um banco chamado "conta" e a coisa falhava.
+
+    Guardar R$500 na caixinha da viagem não é gastar R$500 — o dinheiro só
+    mudou de bolso. Por isso os dois lançamentos levam categoria
+    'Transferência', que fica de fora do resumo, do gasto por período e do
+    "quanto entrou". Sem isso o relatório do mês viraria ficção.
+    """
+    try:
+        valor = abs(float(valor))
+    except (TypeError, ValueError):
+        return {"ok": False, "erro": f"valor inválido: {valor!r}"}
+    if not valor:
+        return {"ok": False, "erro": "valor zero"}
+
+    if not _norm(de) and not _norm(para):
+        return {"ok": False, "erro": "diga pelo menos de onde sai ou pra onde vai"}
+
+    with _conn() as c:
+        origem, e1 = _resolver_banco(c, de, quem, criar=False)
+        if e1 or not origem:
+            return {"ok": False, "erro": e1 or f"não achei '{_norm(de)}'"}
+        destino, e2 = _resolver_banco(c, para, quem, criar=False)
+        if e2 or not destino:
+            return {"ok": False, "erro": e2 or f"não achei '{_norm(para)}'"}
+        if origem["id"] == destino["id"]:
+            return {"ok": False, "erro": "origem e destino são o mesmo lugar"}
+
+        disponivel = _saldo(c, origem["id"])
+        hoje = _hoje(c)
+        agora = _agora(c)
+        grupo = uuid.uuid4().hex[:12]
+        texto = (descricao or "").strip() or f"{origem['nome']} → {destino['nome']}"
+        for banco_id, sinal in ((origem["id"], -1), (destino["id"], 1)):
+            c.execute(
+                "INSERT INTO movimentos (banco_id, valor, descricao, categoria, quando,"
+                " competencia, registrado_em, registrado_por, grupo)"
+                " VALUES (?,?,?,'Transferência',?,?,?,?,?)",
+                (banco_id, sinal * valor, texto, hoje, hoje[:7], agora, quem, grupo))
+        r = {"ok": True, "acao": "transferido", "valor": valor, "grupo": grupo,
+             "de": origem["nome"], "para": destino["nome"],
+             "saldo_de": round(_saldo(c, origem["id"]), 2),
+             "saldo_para": round(_saldo(c, destino["id"]), 2)}
+    if valor > disponivel:
+        # não impede: a pessoa pode saber de um dinheiro que ainda não registrou
+        r["aviso"] = (f"{origem['nome']} tinha só R$ {disponivel:.2f} registrado e "
+                      f"ficou negativo — confira se falta lançar alguma entrada")
+    return r
+
+
+def banco_desativar(nome, quem=None):
+    """Aposenta um banco que não se usa mais. O histórico dele fica."""
+    nome = _norm(nome)
+    with _conn() as c:
+        b = c.execute("SELECT id, nome, ativo FROM bancos WHERE nome = ?", (nome,)).fetchone()
+        if not b:
+            linhas = c.execute("SELECT id, nome FROM bancos WHERE ativo = 1").fetchall()
+            achado = _casar(nome, [(l["id"], l["nome"]) for l in linhas])
+            if not achado:
+                return {"ok": False, "erro": f"banco '{nome}' não existe",
+                        "bancos": [l["nome"] for l in linhas]}
+            b = c.execute("SELECT id, nome, ativo FROM bancos WHERE id = ?",
+                          (achado[0],)).fetchone()
+        if not b["ativo"]:
+            return {"ok": True, "acao": "ja_estava_desativado", "nome": b["nome"]}
+        futuros = c.execute(
+            "SELECT COUNT(*) FROM movimentos WHERE banco_id = ? AND estornado = 0"
+            "   AND quando > date('now','localtime')", (b["id"],)).fetchone()[0]
+        saldo = _saldo(c, b["id"])
+        c.execute("UPDATE bancos SET ativo = 0 WHERE id = ?", (b["id"],))
+    r = {"ok": True, "acao": "desativado", "nome": b["nome"],
+         "saldo_que_ficou": round(saldo, 2)}
+    if futuros:
+        r["aviso"] = (f"{b['nome']} ainda tem {futuros} lançamento(s) futuro(s) — "
+                      f"parcelas que vão cair num banco aposentado")
+    return r
+
+
+FERRAMENTAS.update({"transferir": transferir, "banco_desativar": banco_desativar})
